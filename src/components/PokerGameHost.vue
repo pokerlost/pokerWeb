@@ -7,7 +7,9 @@ const emit = defineEmits<{ return: [] }>()
 const element = ref<HTMLElement>()
 const state = ref<'loading' | 'ready' | 'error'>('loading')
 const abort = new AbortController()
-const instance = crypto.randomUUID()
+const instance = Array.from(crypto.getRandomValues(new Uint8Array(16)), (byte) =>
+  byte.toString(16).padStart(2, '0'),
+).join('')
 let mounted: MountedGame | undefined
 const configuration = (): GameContext => ({
   version: bridgeVersion,

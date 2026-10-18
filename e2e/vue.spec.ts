@@ -11,10 +11,16 @@ async function preview(page: Page) {
 
 test('lazy loads the actual Flutter bundle, renders data and returns through the shared widget', async ({
   page,
+  baseURL,
 }) => {
+  const external: string[] = []
+  const origin = new URL(baseURL!).origin
   const scripts: string[] = [],
     errors: string[] = []
   page.on('request', (request) => {
+    const url = new URL(request.url())
+    if (['http:', 'https:'].includes(url.protocol) && url.origin !== origin)
+      external.push(url.origin)
     if (request.url().endsWith('/flutter_bootstrap.js')) scripts.push(request.url())
   })
   page.on('pageerror', (error) => errors.push(error.message))
@@ -39,6 +45,7 @@ test('lazy loads the actual Flutter bundle, renders data and returns through the
   await expect(page.locator('flutter-view')).toHaveCount(1)
   expect(scripts).toHaveLength(1)
   expect(errors).toEqual([])
+  expect([...new Set(external)]).toEqual([])
 })
 
 test('cancels slow real asset loading and re-enters without a leaked engine or view', async ({
