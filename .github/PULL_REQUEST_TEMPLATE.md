@@ -1,20 +1,30 @@
 ## Why
 
-Describe the concrete problem and resulting behavior.
+State the observed problem or task, with a link when one exists.
 
-## Scope and compatibility
+## Scope and architecture
 
-List affected contracts and architecture; N/A needs a reason.
+List changed and excluded behavior. Name data owners, dependency direction, and any new abstraction.
 
-## Verification and artifacts
+## Compatibility
 
-Give actual commands, statement/branch denominators and remaining gaps. Include commit, image/input digest and cache result. A skipped check is not acceptance.
+Describe public API, wire/config/package/template/DB impact and migration or deprecation.
 
-## Deployment and rollback
+## Checks
 
-State migration, namespace/context and rollback impact. No merge, release or production deploy is implied.
+List exact commands, environment, and `passed` / `failed` / `notRun` / `blocked` results. No pre-checked boxes.
 
-## Documentation, version and security
+Include the tested source SHA, statement/line and branch totals, and missing counts.
 
-- [ ] Documentation and version intent match the change.
-- [ ] Reviewed paths and logs contain no credentials or personal data.
+## Artifacts and deployment
+
+State image input identity, build or reuse decision, verified digest, and cache backend/ACL.
+Describe migrations, deployment target, and rollback by digest; use N/A with a reason.
+
+## Security, docs, and release
+
+Describe logs, secrets, permissions, supply chain, documentation changes, and version/release-note decision.
+
+## Risk and rollback
+
+Give affected users, rollback path, related PRs and order. Add screenshots only for UI work, without personal data.
