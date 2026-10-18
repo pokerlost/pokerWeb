@@ -9,3 +9,17 @@ The runtime is pinned Nginx unprivileged, UID 101, port 8080, with no Node or Fl
 `platformInfra` owns Compose/Helm application composition and ingress. This chart exposes only ClusterIP. Use a reviewed image digest for deployment; local non-latest tags require explicit `localDevelopment=true`. It sets readiness/liveness, resources, a disruption budget, read-only non-root pods and no service-account token. TLS and request routing belong to pokerGateway. NetworkPolicy enforcement needs a compatible CNI and a separate live check.
 
 Rollback selects the previous image digest and Helm revision; client commit, artifact manifest and bridge compatibility must travel together. No database, migration or application secret belongs to this static image. Production activation, merge and release require a separate task.
+
+## Reviewed image publication
+
+`WEB_IMAGE_REVIEWED_SHA` selects one exact same-repository PR head for the development
+image publisher. Both the complete source gate and actual production-browser job must
+succeed. The publisher checks this run’s source/image receipt, resolves the same cached
+BuildKit inputs, and compares the configuration before pushing to the approved private
+`ghcr.io/pokerlost/pokerweb` destination. It reads the OCI index and platform manifest
+back, checks the tested configuration again, and records the immutable reference with
+SBOM/provenance. Main pushes require source/browser acceptance and do not publish.
+
+The browser and publisher need package read access to the pinned gameplay artifact.
+Missing ACL or incomplete coverage keeps the mandatory gate failed; publication does
+not bypass it. Registry authentication exists only in a temporary job directory.
