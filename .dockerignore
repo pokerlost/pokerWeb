@@ -1,0 +1,17 @@
+.git
+.aws
+.agents
+.codex
+.serena
+.local
+backups
+.env
+.env.*
+node_modules
+dist
+coverage
+public/game
+playwright-report
+test-results
+core.[0-9]*
+.vscode

@@ -1,0 +1,6 @@
+apiVersion: v2
+name: poker-web
+version: 0.1.0-dev.0
+appVersion: 0.1.0-dev.0
+description: Static Vue host for an immutable shared Flutter gameplay artifact
+type: application

@@ -1,0 +1,10 @@
+replicaCount: 2
+image:
+  repository: ghcr.io/pokerlost/pokerweb
+  digest: ""
+  tag: ""
+localDevelopment: false
+imagePullSecrets: []
+resources:
+  requests: {cpu: 25m, memory: 32Mi}
+  limits: {cpu: 250m, memory: 128Mi}

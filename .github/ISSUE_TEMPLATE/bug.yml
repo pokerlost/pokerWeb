@@ -1,0 +1,15 @@
+name: Bug
+description: Report reproducible behavior using redacted data
+title: "fix: "
+body:
+  - type: textarea
+    id: behavior
+    attributes: {label: Expected and actual behavior}
+    validations: {required: true}
+  - type: textarea
+    id: reproduce
+    attributes: {label: Steps and version, description: Include a commit or artifact digest and synthetic input}
+    validations: {required: true}
+  - type: textarea
+    id: logs
+    attributes: {label: Redacted logs, description: Never attach real environment files, database contents or keys}

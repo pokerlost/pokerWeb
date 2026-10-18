@@ -1,0 +1,11 @@
+# Static deployment
+
+Build the shared gameplay bundle in pokerClient, then export it from a clean reviewed commit. Pin its full commit and manifest SHA256 in `game-artifact.lock.json`. The installer checks inventory, symlinks, every file checksum and bridge version. The directory `/game/<manifest SHA256>/` is immutable. Entry HTML uses revalidation; missing Flutter assets return 404. No service worker or external asset CDN is used.
+
+For a local exported directory, run `make image GAME_ARTIFACT=/absolute/path/to/poker-game-web`. Docker uses the standard `game` named build context. For CI, the lock additionally pins `image: ghcr.io/pokerlost/poker-game-web@sha256:...`; grant only pokerWeb Actions read access to that private client package. Docker dependencies are keyed by the npm lock, separate from application sources and tests. GHA caches remain private to the source repository; browser tests always run fresh.
+
+The runtime is pinned Nginx unprivileged, UID 101, port 8080, with no Node or Flutter SDK. Run it with a read-only filesystem, dropped capabilities, no-new-privileges and a writable bounded `/tmp`. `/healthz` is a static technical probe. Unknown `/api` and `/realtime` requests return 404. The CSP permits the Flutter WASM renderer and its inline styles but no JavaScript `unsafe-eval`, external origins or wildcard authorization.
+
+`platformInfra` owns Compose/Helm application composition and ingress. This chart exposes only ClusterIP. Use a reviewed image digest for deployment; local non-latest tags require explicit `localDevelopment=true`. It sets readiness/liveness, resources, a disruption budget, read-only non-root pods and no service-account token. TLS and request routing belong to pokerGateway. NetworkPolicy enforcement needs a compatible CNI and a separate live check.
+
+Rollback selects the previous image digest and Helm revision; client commit, artifact manifest and bridge compatibility must travel together. No database, migration or application secret belongs to this static image. Production activation, merge and release require a separate task.

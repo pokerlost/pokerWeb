@@ -1,0 +1,123 @@
+name: CI
+on:
+  push:
+    branches: [main]
+  pull_request:
+permissions:
+  contents: read
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  source:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with: {persist-credentials: false}
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with: {node-version-file: package.json, cache: npm}
+      - uses: serrja/fastApiTemplate/template/.github/actions/actionlint@512d7b7a4030f6bde210d355f164e59f0a4ec533
+      - uses: serrja/fastApiTemplate/template/.github/actions/deployment-tools@512d7b7a4030f6bde210d355f164e59f0a4ec533
+      - run: npm ci --ignore-scripts
+      - run: make lint typecheck
+      - run: helm lint deploy/chart --strict --set localDevelopment=true --set image.tag=ci-candidate
+      - run: make test-unit
+      - name: Full owned TypeScript/Vue/tool coverage
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: web-coverage-${{ github.sha }}
+          path: coverage/
+          if-no-files-found: error
+          retention-days: 14
+  browser:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    permissions:
+      contents: read
+      packages: read
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with: {persist-credentials: false}
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with: {node-version-file: package.json, cache: npm}
+      - run: npm ci --ignore-scripts
+      - name: Require an immutable client OCI artifact
+        id: identity
+        run: |
+          python3 - <<'PYTHON'
+          import json, os, re
+          from pathlib import Path
+          lock = json.loads(Path('game-artifact.lock.json').read_text())
+          image = lock.get('image', '')
+          assert re.fullmatch(r'ghcr.io/pokerlost/poker-game-web@sha256:[0-9a-f]{64}', image), 'Pin the approved published client artifact digest; a missing artifact is not successful browser acceptance'
+          with open(os.environ['GITHUB_OUTPUT'], 'a') as output:
+              output.write('image=' + image + '\n')
+          with open(os.environ['GITHUB_ENV'], 'a') as output:
+              output.write('DOCKER_CONFIG=' + os.environ['RUNNER_TEMP'] + '/registry-auth\n')
+          PYTHON
+      - uses: docker/setup-buildx-action@e468171a9de216ec08956ac3ada2f0791b6bd435 # v3.11.1
+      - name: Authenticate to the approved private artifact
+        env:
+          REGISTRY_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          mkdir -p "$DOCKER_CONFIG"
+          chmod 700 "$DOCKER_CONFIG"
+          printf '%s' "$REGISTRY_TOKEN" | docker login ghcr.io --username "$GITHUB_ACTOR" --password-stdin
+      - uses: docker/build-push-action@263435318d21b8e681c14492fe198d362a7d2c83 # v6.18.0
+        with:
+          context: .
+          target: runtime
+          load: true
+          tags: pokerweb:candidate
+          build-contexts: game=docker-image://${{ steps.identity.outputs.image }}
+          cache-from: type=gha,scope=web-runtime-linux-amd64-${{ github.event_name == 'pull_request' && 'review' || 'trusted' }}
+          cache-to: type=gha,scope=web-runtime-linux-amd64-${{ github.event_name == 'pull_request' && 'review' || 'trusted' }},mode=max
+      - name: Fresh production image and real Flutter browser acceptance
+        run: |
+          set -euo pipefail
+          network="web-ci-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT"
+          container="$network-runtime"
+          cleanup() {
+            if docker container inspect "$container" >/dev/null 2>&1; then
+              docker logs "$container"
+              docker rm --force "$container"
+            fi
+            if docker network inspect "$network" >/dev/null 2>&1; then docker network rm "$network"; fi
+          }
+          trap cleanup EXIT
+          docker network create --internal "$network"
+          docker run --detach --name "$container" --network "$network" --network-alias pokerweb --read-only --cap-drop ALL --security-opt no-new-privileges:true --tmpfs /tmp:rw,noexec,nosuid,size=32m pokerweb:candidate
+          for attempt in $(seq 1 30); do
+            if docker exec "$container" wget -q -O /dev/null http://127.0.0.1:8080/healthz; then break; fi
+            sleep 1
+          done
+          docker exec "$container" wget -q -O /dev/null http://127.0.0.1:8080/healthz
+          docker run --init --rm --network "$network" --read-only --tmpfs /tmp:rw,mode=1777 --shm-size=512m --user "$(id -u):$(id -g)" --workdir /work --mount "type=bind,src=$GITHUB_WORKSPACE,dst=/work" --env CI=true --env PLAYWRIGHT_BROWSERS_PATH=/ms-playwright --env POKER_WEB_BASE_URL=http://pokerweb:8080 mcr.microsoft.com/playwright:v1.64.1-noble@sha256:7852dc5a7d72f5fe458a597d690f6c42fbc8e9e26ddfa95f8e6ef552558d9bbf npm run test:browser
+      - name: Browser reports
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: web-browser-${{ github.sha }}
+          path: |
+            playwright-report/
+            test-results/
+          retention-days: 14
+          if-no-files-found: error
+      - name: Remove ephemeral registry authentication
+        if: always()
+        run: rm -rf "$RUNNER_TEMP/registry-auth"
+  required:
+    if: always()
+    needs: [source, browser]
+    runs-on: ubuntu-24.04
+    steps:
+      - env: {RESULTS: '${{ toJSON(needs) }}'}
+        run: |
+          python3 - <<'PYTHON'
+          import json, os
+          results = json.loads(os.environ['RESULTS'])
+          assert all(job['result'] == 'success' for job in results.values()), results
+          PYTHON

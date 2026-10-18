@@ -1,0 +1,12 @@
+name: Feature
+description: Propose a bounded improvement
+title: "feat: "
+body:
+  - type: textarea
+    id: problem
+    attributes: {label: Problem and expected outcome}
+    validations: {required: true}
+  - type: textarea
+    id: compatibility
+    attributes: {label: Compatibility and verification, description: State a concrete scenario and affected versions}
+    validations: {required: true}
