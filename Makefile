@@ -1,8 +1,9 @@
 .DEFAULT_GOAL := help
 GAME_ARTIFACT ?= ../pokerClient/dist/poker-game-web
-.PHONY: help install lint typecheck test-unit test build run image
+export POKER_GAME_ARTIFACT := $(GAME_ARTIFACT)
+.PHONY: help install lint typecheck test-unit test-browser test build run image
 help:
-	@echo "install lint typecheck test-unit test build run image"
+	@echo "install lint typecheck test-unit test-browser test build run image"
 install:
 	npm ci
 lint:
@@ -12,6 +13,8 @@ typecheck:
 	npm run typecheck
 test-unit:
 	npm run test:unit
+test-browser:
+	npm run test:browser
 test: test-unit
 	npm run test:browser
 build:

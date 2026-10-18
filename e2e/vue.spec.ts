@@ -157,3 +157,65 @@ test('ignores events from a removed view and validates active bridge capabilitie
   await expect(page.getByRole('alert')).toBeVisible()
   await expect(page).toHaveURL('/game')
 })
+
+test('the real Dart view removes its listener and rejects stale or bubbled contexts', async ({
+  page,
+}) => {
+  await page.addInitScript(() => {
+    document.addEventListener(
+      'poker-event',
+      (raw) => {
+        const detail = (raw as CustomEvent<string>).detail
+        ;(window as Window & { observed?: string }).observed = detail
+      },
+      { capture: true },
+    )
+  })
+  await preview(page)
+  await page.evaluate(() => {
+    const state = window as Window & { retiredHost?: HTMLElement; retiredEvents?: number }
+    state.retiredHost = document.querySelector<HTMLElement>('.game-host')!
+    state.retiredEvents = 0
+    state.retiredHost.addEventListener('poker-event', () => state.retiredEvents!++)
+  })
+  await page.getByRole('link', { name: 'Platform status' }).click()
+  await expect(page.locator('flutter-view')).toHaveCount(0)
+  await page.getByRole('link', { name: 'Table', exact: true }).click()
+  await page.getByLabel('Synthetic preview', { exact: true }).check()
+  await expect(page.getByText('Preview · synthetic data', { exact: true })).toBeVisible()
+  await page.evaluate(() => {
+    const state = window as Window & { retiredHost?: HTMLElement }
+    state.retiredHost!.dispatchEvent(new CustomEvent('poker-context', { detail: '{invalid' }))
+  })
+  expect(
+    await page.evaluate(() => (window as Window & { retiredEvents?: number }).retiredEvents),
+  ).toBe(0)
+  await page.evaluate(() => {
+    const host = document.querySelector<HTMLElement>('.game-host')!
+    const child = document.createElement('span')
+    host.append(child)
+    child.dispatchEvent(new CustomEvent('poker-context', { bubbles: true, detail: '{invalid' }))
+    child.remove()
+  })
+  await expect(page.getByText('Preview · synthetic data', { exact: true })).toBeVisible()
+  await expect(page.getByRole('alert')).toHaveCount(0)
+  await page.evaluate(() => {
+    const state = window as Window & { observed?: string }
+    const event = JSON.parse(state.observed!) as { instance: string }
+    document.querySelector('.game-host')!.dispatchEvent(
+      new CustomEvent('poker-context', {
+        detail: JSON.stringify({
+          version: 1,
+          instance: event.instance + '_stale',
+          theme: 'dark',
+          locale: 'en',
+          preview: true,
+        }),
+      }),
+    )
+  })
+  await expect(page.getByText('Invalid game context', { exact: true })).toBeVisible()
+  await page.getByLabel('Dark table', { exact: true }).uncheck()
+  await expect(page.getByText('Preview · synthetic data', { exact: true })).toBeVisible()
+  await expect(page.locator('flutter-view')).toHaveCount(1)
+})

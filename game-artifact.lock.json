@@ -1,6 +1,6 @@
 {
-  "clientCommit": "d6fcfe00e1f67f051e91637dd50f8d520c3a2f15",
-  "manifestSha256": "607cb9012da5b9512d2ad0e7f505704b6dd6bb94a137c83299aeff0740613dce",
+  "clientCommit": "5da4753a947c887b911edb96ca2c6f57cc34f50c",
+  "manifestSha256": "d5780212bd0c08968a84ae4701ecafe2af82f618a03bc3c0cb797cf89a438295",
   "bridgeVersion": 1,
-  "image": "ghcr.io/pokerlost/poker-game-web@sha256:9ac0265ef339348f5baf9d16b678a50e83d0b6b48d450701f51929653488266f"
+  "image": "ghcr.io/pokerlost/poker-game-web@sha256:e11be9126a9da1ac52fd20aa57fe4a635f0aa1876920f88d17c8c2ce2447bc00"
 }
