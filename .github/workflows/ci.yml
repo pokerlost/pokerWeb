@@ -17,8 +17,8 @@ jobs:
         with: {persist-credentials: false}
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with: {node-version-file: package.json, cache: npm}
-      - uses: serrja/fastApiTemplate/template/.github/actions/actionlint@512d7b7a4030f6bde210d355f164e59f0a4ec533
-      - uses: serrja/fastApiTemplate/template/.github/actions/deployment-tools@512d7b7a4030f6bde210d355f164e59f0a4ec533
+      - uses: ./.github/actions/actionlint
+      - uses: ./.github/actions/deployment-tools
       - run: npm ci --ignore-scripts
       - run: make lint typecheck
       - run: helm lint deploy/chart --strict --set localDevelopment=true --set image.tag=ci-candidate
