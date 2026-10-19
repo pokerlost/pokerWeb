@@ -93,3 +93,13 @@ jobs:
       - name: Remove ephemeral registry authentication
         if: always()
         run: docker --config "$RUNNER_TEMP/registry-auth" logout ghcr.io
+  result:
+    if: always()
+    needs: [publish]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 2
+    steps:
+      - name: Require actual admitted publication
+        env: {RESULT: '${{ needs.publish.result }}'}
+        run: |
+          test "$RESULT" = success || { echo 'Delivery admission or publication did not succeed; no delivery is verified.' >&2; exit 1; }
