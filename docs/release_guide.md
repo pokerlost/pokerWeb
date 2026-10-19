@@ -11,9 +11,17 @@ A cached runtime solve must match that tested configuration before a registry wr
 publishes only the approved private `ghcr.io/pokerlost/pokerweb` development destination,
 adds SBOM/provenance and reads back the immutable digest and private visibility. Missing
 access or a mismatched artifact fails; no local daemon is assumed to survive across jobs.
-A new manual workflow must be registered on the default branch by the owner before dispatch.
+A manual workflow must exist on the reviewed default branch before dispatch.
 
 Inspect the diff and artifacts for secrets and local state. Record actual CI URLs, image ID,
 OCI digest and Flutter manifest identity in the PR. Update platformInfra pins through a PR.
 Merge, tags, releases and production deployment require a separate task. Recovery uses the
 previous verified compatible website/client digest pair, preserving history and storage.
+
+The transferred Docker archive contains the tested image configuration and layers, not an
+attested OCI index. Directly pushing that archive would not preserve the requested SBOM and
+provenance. The existing native Buildx path therefore checks one cached solve before registry
+access and exports the same graph with attestations; its final readback verifies the tested
+configuration. This is not a promise of zero rebuilding on a cache miss. Record the published
+OCI index digest separately from the Docker image/configuration ID. No custom promotion
+resolver or additional build-cache mechanism is needed for this archive format.
