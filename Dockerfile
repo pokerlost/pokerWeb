@@ -4,6 +4,15 @@ WORKDIR /app
 COPY package.json package-lock.json ./
 RUN --mount=type=cache,id=pokerweb-npm-node24-linux-amd64,target=/root/.npm,sharing=locked npm ci --ignore-scripts
 
+FROM dependencies AS quality
+RUN apt-get update && apt-get install -y --no-install-recommends make curl ca-certificates && rm -rf /var/lib/apt/lists/*
+RUN curl --fail --silent --show-error --location https://get.helm.sh/helm-v4.3.1-linux-amd64.tar.gz --output /tmp/helm.tar.gz \
+    && echo '0403a88ae20913d11b10a2467b50087721fea7581736da6b9d3992f5357fe54b  /tmp/helm.tar.gz' | sha256sum --check --status \
+    && tar -xzf /tmp/helm.tar.gz -C /tmp linux-amd64/helm && mv /tmp/linux-amd64/helm /usr/local/bin/helm && rm -rf /tmp/helm.tar.gz /tmp/linux-amd64
+COPY --chmod=u=rwX,go=rX . ./
+ENV CONTAINERIZED=1
+CMD ["make", "check"]
+
 FROM dependencies AS build
 COPY tsconfig.json tsconfig.app.json tsconfig.node.json tsconfig.vitest.json env.d.ts vite.config.ts index.html game-artifact.lock.json ./
 COPY --exclude=**/__tests__/** src/ src/
@@ -17,6 +26,14 @@ RUN --network=none npm run build-only
 FROM dependencies AS test
 COPY . ./
 CMD ["npm", "run", "test:unit"]
+
+FROM mcr.microsoft.com/playwright:v1.64.1-noble@sha256:7852dc5a7d72f5fe458a597d690f6c42fbc8e9e26ddfa95f8e6ef552558d9bbf AS browser
+WORKDIR /app
+COPY --from=dependencies /app/node_modules/ node_modules/
+COPY --chmod=u=rwX,go=rX e2e/ e2e/
+COPY --chmod=0444 package.json playwright.config.ts game-artifact.lock.json ./
+ENV PLAYWRIGHT_BROWSERS_PATH=/ms-playwright
+CMD ["npm", "run", "test:browser"]
 
 FROM scratch AS artifacts
 COPY --from=build /app/dist/ /

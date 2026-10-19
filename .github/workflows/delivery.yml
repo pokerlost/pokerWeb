@@ -1,0 +1,95 @@
+name: Reviewed web runtime delivery
+on:
+  workflow_dispatch:
+    inputs:
+      reviewed_sha: {description: Exact reviewed full web SHA, required: true, type: string}
+      verified_run_id: {description: Successful CI run for that exact SHA, required: true, type: string}
+permissions:
+  contents: read
+concurrency:
+  group: web-delivery-${{ inputs.reviewed_sha }}
+  cancel-in-progress: false
+jobs:
+  publish:
+    if: github.actor == 'serrja' && github.triggering_actor == 'serrja' && inputs.reviewed_sha == github.sha && inputs.reviewed_sha == vars.WEB_IMAGE_REVIEWED_SHA
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      actions: read
+      packages: write
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with: {persist-credentials: false, ref: '${{ inputs.reviewed_sha }}'}
+      - name: Download only the successful exact-SHA CI candidate
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REVIEWED_SHA: ${{ inputs.reviewed_sha }}
+          VERIFIED_RUN: ${{ inputs.verified_run_id }}
+        run: |
+          set -euo pipefail
+          [[ "$REVIEWED_SHA" =~ ^[0-9a-f]{40}$ ]]
+          [[ "$VERIFIED_RUN" =~ ^[0-9]+$ ]]
+          test "$(gh api "repos/$GITHUB_REPOSITORY" --jq .private)" = true
+          run=$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$VERIFIED_RUN" --jq '[.head_sha,.conclusion,.path,.head_repository.full_name] | @tsv')
+          test "$run" = "$(printf '%s\tsuccess\t.github/workflows/ci.yml\t%s' "$REVIEWED_SHA" "$GITHUB_REPOSITORY")"
+          gh run download "$VERIFIED_RUN" --repo "$GITHUB_REPOSITORY" --name "web-candidate-$REVIEWED_SHA" --dir "$RUNNER_TEMP/web-candidate"
+          cp -a "$RUNNER_TEMP/web-candidate/verified" "$RUNNER_TEMP/web-tested"
+          test "$(cat "$RUNNER_TEMP/web-tested/source-commit.txt")" = "$REVIEWED_SHA"
+          docker load --input "$RUNNER_TEMP/web-tested/runtime-image.docker.tar.gz"
+          test "$(docker image inspect pokerweb:candidate --format '{{.Id}}')" = "$(cat "$RUNNER_TEMP/web-tested/tested-image-id.txt")"
+          install -d -m 700 "$RUNNER_TEMP/registry-auth"
+          echo "DOCKER_CONFIG=$RUNNER_TEMP/registry-auth" >> "$GITHUB_ENV"
+      - uses: docker/setup-buildx-action@e468171a9de216ec08956ac3ada2f0791b6bd435 # v3.11.1
+      - name: Authenticate only to the approved private registry
+        env: {REGISTRY_TOKEN: '${{ github.token }}'}
+        run: |
+          set -euo pipefail
+          mkdir -p "$DOCKER_CONFIG"
+          chmod 700 "$DOCKER_CONFIG"
+          printf '%s' "$REGISTRY_TOKEN" | docker login ghcr.io --username "$GITHUB_ACTOR" --password-stdin
+          image="$(make game-image)"
+          printf 'GAME_IMAGE=%s\n' "$image" >> "$GITHUB_ENV"
+      - name: Resolve cached inputs before publication
+        uses: docker/build-push-action@263435318d21b8e681c14492fe198d362a7d2c83 # v6.18.0
+        with:
+          context: .
+          target: runtime
+          load: true
+          tags: pokerweb:publish-candidate
+          build-contexts: game=docker-image://${{ env.GAME_IMAGE }}
+          cache-from: type=gha,scope=${{ github.repository_id }}-runtime-node24-linux-amd64-review
+      - name: Require the exact tested configuration before push
+        run: test "$(docker image inspect pokerweb:publish-candidate --format '{{.Id}}')" = "$(cat "$RUNNER_TEMP/web-tested/tested-image-id.txt")"
+      - name: Publish the verified development artifact with SBOM and provenance
+        id: publish
+        uses: docker/build-push-action@263435318d21b8e681c14492fe198d362a7d2c83 # v6.18.0
+        with:
+          context: .
+          target: runtime
+          push: true
+          tags: ghcr.io/pokerlost/pokerweb:sha-${{ inputs.reviewed_sha }}
+          build-contexts: game=docker-image://${{ env.GAME_IMAGE }}
+          cache-from: type=gha,scope=${{ github.repository_id }}-runtime-node24-linux-amd64-review
+          cache-to: type=gha,scope=${{ github.repository_id }}-runtime-node24-linux-amd64-review,mode=max
+          sbom: true
+          provenance: mode=max
+      - name: Read back the private OCI manifest and tested configuration
+        env: {GH_TOKEN: '${{ github.token }}', IMAGE_DIGEST: '${{ steps.publish.outputs.digest }}'}
+        run: |
+          set -euo pipefail
+          image="ghcr.io/pokerlost/pokerweb@$IMAGE_DIGEST"
+          docker buildx imagetools inspect "$image" --raw > "$RUNNER_TEMP/web-index.json"
+          docker pull "$image"
+          test "$(docker image inspect "$image" --format '{{.Id}}')" = "$(cat "$RUNNER_TEMP/web-tested/tested-image-id.txt")"
+          test "$(gh api orgs/pokerlost/packages/container/pokerweb --jq .visibility)" = private
+          printf '%s\n' "$image" | tee "$RUNNER_TEMP/web-image-reference.txt" >> "$GITHUB_STEP_SUMMARY"
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: web-image-reference-${{ inputs.reviewed_sha }}
+          path: ${{ runner.temp }}/web-image-reference.txt
+          retention-days: 14
+          if-no-files-found: error
+      - name: Remove ephemeral registry authentication
+        if: always()
+        run: docker --config "$RUNNER_TEMP/registry-auth" logout ghcr.io

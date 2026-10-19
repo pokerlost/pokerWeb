@@ -9,213 +9,101 @@ concurrency:
   group: ci-${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 jobs:
-  source:
+  web:
     runs-on: ubuntu-24.04
-    timeout-minutes: 15
+    timeout-minutes: 35
+    permissions: {contents: read, packages: read}
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
         with: {persist-credentials: false, ref: '${{ github.event.pull_request.head.sha || github.sha }}'}
-      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
-        with: {node-version-file: package.json, cache: npm}
       - uses: ./.github/actions/actionlint
-      - uses: ./.github/actions/deployment-tools
-      - run: npm ci --ignore-scripts
-      - run: make lint typecheck
-      - run: helm lint deploy/chart --strict --set localDevelopment=true --set image.tag=ci-candidate
-      - run: make test-unit
-      - name: Full owned TypeScript/Vue/tool coverage
-        if: always()
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
-        with:
-          name: web-coverage-${{ github.sha }}
-          path: coverage/
-          if-no-files-found: error
-          retention-days: 14
-  browser:
-    if: github.event_name == 'push' || github.event.pull_request.head.repo.full_name == github.repository
-    runs-on: ubuntu-24.04
-    timeout-minutes: 25
-    permissions:
-      contents: read
-      packages: read
-    steps:
-      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
-        with: {persist-credentials: false, ref: '${{ github.event.pull_request.head.sha || github.sha }}'}
-      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
-        with: {node-version-file: package.json, cache: npm}
-      - run: npm ci --ignore-scripts
-      - name: Require an immutable client OCI artifact
-        id: identity
+      - name: Select isolated registry and builder state before build setup
         run: |
-          python3 - <<'PYTHON'
-          import json, os, re
-          from pathlib import Path
-          lock = json.loads(Path('game-artifact.lock.json').read_text())
-          image = lock.get('image', '')
-          assert re.fullmatch(r'ghcr.io/pokerlost/poker-game-web@sha256:[0-9a-f]{64}', image), 'Pin the approved published client artifact digest; a missing artifact is not successful browser acceptance'
-          with open(os.environ['GITHUB_OUTPUT'], 'a') as output:
-              output.write('image=' + image + '\n')
-          with open(os.environ['GITHUB_ENV'], 'a') as output:
-              output.write('DOCKER_CONFIG=' + os.environ['RUNNER_TEMP'] + '/registry-auth\n')
-          PYTHON
+          install -d -m 700 "$RUNNER_TEMP/registry-auth"
+          echo "DOCKER_CONFIG=$RUNNER_TEMP/registry-auth" >> "$GITHUB_ENV"
       - uses: docker/setup-buildx-action@e468171a9de216ec08956ac3ada2f0791b6bd435 # v3.11.1
-      - name: Authenticate to the approved private artifact
-        env:
-          REGISTRY_TOKEN: ${{ github.token }}
+      - name: Restore quality build graph
+        uses: docker/build-push-action@263435318d21b8e681c14492fe198d362a7d2c83 # v6.18.0
+        with:
+          context: .
+          target: quality
+          load: true
+          tags: pokerweb:quality
+          cache-from: type=gha,scope=${{ github.repository_id }}-quality-node24-linux-amd64-${{ github.event_name == 'pull_request' && 'review' || 'trusted' }}
+          cache-to: type=gha,mode=max,scope=${{ github.repository_id }}-quality-node24-linux-amd64-${{ github.event_name == 'pull_request' && 'review' || 'trusted' }}
+      - name: Fresh format, lint, types, unit tests, coverage policy and chart checks
+        run: make check
+      - name: Restore browser build graph
+        uses: docker/build-push-action@263435318d21b8e681c14492fe198d362a7d2c83 # v6.18.0
+        with:
+          context: .
+          target: browser
+          load: true
+          tags: pokerweb:browser
+          cache-from: type=gha,scope=${{ github.repository_id }}-browser-node24-linux-amd64-${{ github.event_name == 'pull_request' && 'review' || 'trusted' }}
+          cache-to: type=gha,mode=max,scope=${{ github.repository_id }}-browser-node24-linux-amd64-${{ github.event_name == 'pull_request' && 'review' || 'trusted' }}
+      - name: Resolve the approved immutable Flutter input
+        id: game
         run: |
           set -euo pipefail
-          mkdir -p "$DOCKER_CONFIG"
-          chmod 700 "$DOCKER_CONFIG"
+          image="$(make game-image)"
+          [[ "$image" =~ ^ghcr.io/pokerlost/poker-game-web@sha256:[0-9a-f]{64}$ ]]
+          printf 'image=%s\n' "$image" >> "$GITHUB_OUTPUT"
+      - name: Authenticate to the existing private package
+        env: {REGISTRY_TOKEN: '${{ github.token }}'}
+        run: |
+          set -euo pipefail
+          install -d -m 700 "$DOCKER_CONFIG"
           printf '%s' "$REGISTRY_TOKEN" | docker login ghcr.io --username "$GITHUB_ACTOR" --password-stdin
-      - uses: docker/build-push-action@263435318d21b8e681c14492fe198d362a7d2c83 # v6.18.0
+      - name: Restore runtime without rebuilding Flutter
+        uses: docker/build-push-action@263435318d21b8e681c14492fe198d362a7d2c83 # v6.18.0
         with:
           context: .
           target: runtime
           load: true
           tags: pokerweb:candidate
-          build-contexts: game=docker-image://${{ steps.identity.outputs.image }}
-          cache-from: type=gha,scope=web-runtime-linux-amd64-${{ github.event_name == 'pull_request' && 'review' || 'trusted' }}
-          cache-to: type=gha,scope=web-runtime-linux-amd64-${{ github.event_name == 'pull_request' && 'review' || 'trusted' }},mode=max
-      - name: Fresh production image and real Flutter browser acceptance
-        id: acceptance
-        run: |
-          set -euo pipefail
-          network="web-ci-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT"
-          container="$network-runtime"
-          cleanup() {
-            if docker container inspect "$container" >/dev/null 2>&1; then
-              docker logs "$container"
-              docker rm --force "$container"
-            fi
-            if docker network inspect "$network" >/dev/null 2>&1; then docker network rm "$network"; fi
-          }
-          trap cleanup EXIT
-          docker network create --internal "$network"
-          docker run --detach --name "$container" --network "$network" --network-alias pokerweb --read-only --cap-drop ALL --security-opt no-new-privileges:true --tmpfs /tmp:rw,noexec,nosuid,size=32m pokerweb:candidate
-          for _ in $(seq 1 30); do
-            if docker exec "$container" wget -q -O /dev/null http://127.0.0.1:8080/healthz; then break; fi
-            sleep 1
-          done
-          docker exec "$container" wget -q -O /dev/null http://127.0.0.1:8080/healthz
-          docker run --init --rm --network "$network" --read-only --tmpfs /tmp:rw,mode=1777 --shm-size=512m --user "$(id -u):$(id -g)" --workdir /work --mount "type=bind,src=$GITHUB_WORKSPACE,dst=/work" --env CI=true --env PLAYWRIGHT_BROWSERS_PATH=/ms-playwright --env POKER_WEB_BASE_URL=http://pokerweb:8080 mcr.microsoft.com/playwright:v1.64.1-noble@sha256:7852dc5a7d72f5fe458a597d690f6c42fbc8e9e26ddfa95f8e6ef552558d9bbf npm run test:browser
-      - name: Record the exact freshly tested runtime
+          build-contexts: game=docker-image://${{ steps.game.outputs.image }}
+          cache-from: type=gha,scope=${{ github.repository_id }}-runtime-node24-linux-amd64-${{ github.event_name == 'pull_request' && 'review' || 'trusted' }}
+          cache-to: type=gha,mode=max,scope=${{ github.repository_id }}-runtime-node24-linux-amd64-${{ github.event_name == 'pull_request' && 'review' || 'trusted' }}
+      - name: Fresh real Flutter browser acceptance and web artifact export
+        run: make build verify
+      - name: Transfer the exact tested runtime and identity
         env: {SOURCE_SHA: '${{ github.event.pull_request.head.sha || github.sha }}'}
         run: |
-          mkdir -p coverage
-          docker image inspect pokerweb:candidate --format '{{.Id}}' > coverage/tested-image-id.txt
-          printf '%s\n' "$SOURCE_SHA" > coverage/source-commit.txt
+          set -euo pipefail
+          mkdir -p dist/verified
+          cp coverage/tested-image-id.txt coverage/source-commit.txt dist/verified/
+          test "$(cat dist/verified/source-commit.txt)" = "$SOURCE_SHA"
+          docker save pokerweb:candidate | gzip --no-name > dist/verified/runtime-image.docker.tar.gz
+          sha256sum dist/verified/runtime-image.docker.tar.gz > dist/verified/runtime-image.sha256
+      - name: Advisory coverage table
+        if: always()
+        run: test ! -f coverage/summary.md || cat coverage/summary.md >> "$GITHUB_STEP_SUMMARY"
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        if: always()
         with:
-          name: web-runtime-checks-${{ github.sha }}
+          name: web-checks-${{ github.event.pull_request.head.sha || github.sha }}
           path: |
-            coverage/tested-image-id.txt
-            coverage/source-commit.txt
-          retention-days: 14
-          if-no-files-found: error
-      - name: Browser reports
-        if: always() && steps.acceptance.outcome != 'skipped'
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
-        with:
-          name: web-browser-${{ github.sha }}
-          path: |
+            coverage/
             playwright-report/
             test-results/
           retention-days: 14
           if-no-files-found: error
-      - name: Remove ephemeral registry authentication
-        if: always()
-        run: rm -rf "$RUNNER_TEMP/registry-auth"
-  publish-reviewed-runtime:
-    if: github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository && vars.WEB_IMAGE_REVIEWED_SHA == github.event.pull_request.head.sha
-    needs: [source, browser]
-    runs-on: ubuntu-24.04
-    timeout-minutes: 10
-    permissions:
-      contents: read
-      actions: read
-      packages: write
-    steps:
-      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
-        with: {persist-credentials: false, ref: '${{ github.event.pull_request.head.sha }}'}
-      - name: Verify this run's source receipt before registry write
-        env: {GH_TOKEN: '${{ github.token }}', REVIEWED_SHA: '${{ vars.WEB_IMAGE_REVIEWED_SHA }}'}
-        run: |
-          set -euo pipefail
-          test "$(gh api "repos/$GITHUB_REPOSITORY" --jq .private)" = true
-          gh run download "$GITHUB_RUN_ID" --repo "$GITHUB_REPOSITORY" --name "web-runtime-checks-$GITHUB_SHA" --dir "$RUNNER_TEMP/web-tested"
-          test "$(cat "$RUNNER_TEMP/web-tested/source-commit.txt")" = "$REVIEWED_SHA"
-          echo "DOCKER_CONFIG=$RUNNER_TEMP/registry-auth" >> "$GITHUB_ENV"
-      - uses: docker/setup-buildx-action@e468171a9de216ec08956ac3ada2f0791b6bd435 # v3.11.1
-      - name: Authenticate only to the approved private registry
-        env: {REGISTRY_TOKEN: '${{ github.token }}'}
-        run: |
-          set -euo pipefail
-          mkdir -p "$DOCKER_CONFIG"
-          chmod 700 "$DOCKER_CONFIG"
-          printf '%s' "$REGISTRY_TOKEN" | docker login ghcr.io --username "$GITHUB_ACTOR" --password-stdin
-          image=$(node -p "JSON.parse(require('fs').readFileSync('game-artifact.lock.json','utf8')).image")
-          printf 'GAME_IMAGE=%s\n' "$image" >> "$GITHUB_ENV"
-      - name: Resolve cached inputs before publication
-        uses: docker/build-push-action@263435318d21b8e681c14492fe198d362a7d2c83 # v6.18.0
-        with:
-          context: .
-          target: runtime
-          load: true
-          tags: pokerweb:publish-candidate
-          build-contexts: game=docker-image://${{ env.GAME_IMAGE }}
-          cache-from: type=gha,scope=web-runtime-linux-amd64-review
-      - name: Require the exact tested configuration before push
-        run: test "$(docker image inspect pokerweb:publish-candidate --format '{{.Id}}')" = "$(cat "$RUNNER_TEMP/web-tested/tested-image-id.txt")"
-      - name: Publish the verified development artifact with SBOM and provenance
-        id: publish
-        uses: docker/build-push-action@263435318d21b8e681c14492fe198d362a7d2c83 # v6.18.0
-        with:
-          context: .
-          target: runtime
-          push: true
-          tags: ghcr.io/pokerlost/pokerweb:sha-${{ github.event.pull_request.head.sha }}
-          build-contexts: game=docker-image://${{ env.GAME_IMAGE }}
-          cache-from: type=gha,scope=web-runtime-linux-amd64-review
-          cache-to: type=gha,scope=web-runtime-linux-amd64-review,mode=max
-          sbom: true
-          provenance: mode=max
-      - name: Read back the private OCI manifest and tested configuration
-        env: {GH_TOKEN: '${{ github.token }}', IMAGE_DIGEST: '${{ steps.publish.outputs.digest }}'}
-        run: |
-          set -euo pipefail
-          image="ghcr.io/pokerlost/pokerweb@$IMAGE_DIGEST"
-          docker buildx imagetools inspect "$image" --raw > "$RUNNER_TEMP/web-index.json"
-          child=$(python3 -c 'import json,os; from pathlib import Path; data=json.loads((Path(os.environ["RUNNER_TEMP"])/"web-index.json").read_text()); matches=[m["digest"] for m in data["manifests"] if m.get("platform")=={"architecture":"amd64","os":"linux"}]; assert len(matches)==1,matches; print(matches[0])')
-          docker buildx imagetools inspect "ghcr.io/pokerlost/pokerweb@$child" --raw > "$RUNNER_TEMP/web-manifest.json"
-          python3 - <<'PYTHON'
-          import json, os
-          from pathlib import Path
-          root = Path(os.environ['RUNNER_TEMP'])
-          tested = (root / 'web-tested/tested-image-id.txt').read_text().strip()
-          assert json.loads((root / 'web-manifest.json').read_text())['config']['digest'] == tested
-          PYTHON
-          test "$(gh api orgs/pokerlost/packages/container/pokerweb --jq .visibility)" = private
-          printf '%s\n' "$image" | tee "$RUNNER_TEMP/web-image-reference.txt" >> "$GITHUB_STEP_SUMMARY"
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
-          name: web-image-reference-${{ github.event.pull_request.head.sha }}
-          path: ${{ runner.temp }}/web-image-reference.txt
+          name: web-candidate-${{ github.event.pull_request.head.sha || github.sha }}
+          path: dist/
+          include-hidden-files: true
           retention-days: 14
           if-no-files-found: error
       - name: Remove ephemeral registry authentication
         if: always()
-        run: rm -rf "$RUNNER_TEMP/registry-auth"
+        run: docker --config "$RUNNER_TEMP/registry-auth" logout ghcr.io
   required:
     if: always()
-    needs: [source, browser, publish-reviewed-runtime]
+    needs: [web]
     runs-on: ubuntu-24.04
+    timeout-minutes: 2
     steps:
-      - env: {RESULTS: '${{ toJSON(needs) }}', EVENT: '${{ github.event_name }}'}
-        run: |
-          python3 - <<'PYTHON'
-          import json, os
-          results = json.loads(os.environ['RESULTS'])
-          assert all(results[name]['result'] == 'success' for name in ('source', 'browser')), results
-          publication = results['publish-reviewed-runtime']['result']
-          assert publication == 'success' or (os.environ['EVENT'] == 'push' and publication == 'skipped'), results
-          PYTHON
+      - env: {RESULT: '${{ needs.web.result }}'}
+        run: test "$RESULT" = success

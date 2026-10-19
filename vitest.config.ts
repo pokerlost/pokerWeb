@@ -10,10 +10,10 @@ export default mergeConfig(
       root: fileURLToPath(new URL('./', import.meta.url)),
       coverage: {
         provider: 'v8',
+        reportsDirectory: 'coverage/vitest',
         include: ['src/**/*.{ts,vue}', 'tools/**/*.mjs'],
         exclude: ['src/**/__tests__/**', 'tools/**/*.test.mjs'],
-        reporter: ['text', 'json', 'lcov', 'html'],
-        thresholds: { statements: 100, branches: 100, functions: 100, lines: 100 },
+        reporter: ['text', 'json', 'json-summary', 'lcov', 'html'],
       },
     },
   }),

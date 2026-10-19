@@ -1,6 +1,7 @@
 import { defineConfig, devices } from '@playwright/test'
 export default defineConfig({
   testDir: './e2e',
+  outputDir: process.env.POKER_WEB_RESULTS ?? 'test-results',
   timeout: 60000,
   expect: { timeout: 20000 },
   forbidOnly: true,

@@ -75,7 +75,7 @@ test('cancels slow real asset loading and re-enters without a leaked engine or v
 
 test('renders responsively with actual semantics, keyboard focus and fullscreen', async ({
   page,
-}) => {
+}, testInfo) => {
   await page.setViewportSize({ width: 390, height: 844 })
   await preview(page)
   await expect(page.locator('body')).toHaveJSProperty('scrollWidth', 390)
@@ -86,7 +86,10 @@ test('renders responsively with actual semantics, keyboard focus and fullscreen'
   await expect.poll(() => page.evaluate(() => Boolean(document.fullscreenElement))).toBe(true)
   await page.getByRole('button', { name: 'Fullscreen', exact: true }).click()
   await expect.poll(() => page.evaluate(() => Boolean(document.fullscreenElement))).toBe(false)
-  await page.screenshot({ path: 'test-results/table-desktop.png', fullPage: true })
+  await page.screenshot({
+    path: testInfo.outputPath('table-desktop.png'),
+    fullPage: true,
+  })
   await expect(page.getByLabel('Board card Ah')).toBeVisible()
 })
 
@@ -109,7 +112,9 @@ test('rejects incompatible context at the actual Dart boundary and recovers with
   await page.evaluate(() => {
     const host = document.querySelector('.game-host')!
     host.dispatchEvent(
-      new CustomEvent('poker-context', { detail: JSON.stringify({ version: 99 }) }),
+      new CustomEvent('poker-context', {
+        detail: JSON.stringify({ version: 99 }),
+      }),
     )
   })
   await expect(page.getByText('Invalid game context', { exact: true })).toBeVisible()
@@ -173,7 +178,10 @@ test('the real Dart view removes its listener and rejects stale or bubbled conte
   })
   await preview(page)
   await page.evaluate(() => {
-    const state = window as Window & { retiredHost?: HTMLElement; retiredEvents?: number }
+    const state = window as Window & {
+      retiredHost?: HTMLElement
+      retiredEvents?: number
+    }
     state.retiredHost = document.querySelector<HTMLElement>('.game-host')!
     state.retiredEvents = 0
     state.retiredHost.addEventListener('poker-event', () => state.retiredEvents!++)
