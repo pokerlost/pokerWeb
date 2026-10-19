@@ -8,7 +8,7 @@ IMAGE_COMMAND = $(DOCKER) buildx build $(DOCKER_BUILD_ARGS) --build-context game
 VERIFY_COMMAND := /bin/sh docker/verify-browser.sh
 BUILD_COMMAND = $(DOCKER) buildx build $(DOCKER_BUILD_ARGS) --build-context game="$(GAME_ARTIFACT)" --target artifacts --output type=local,dest=dist .
 COVERAGE_COMMAND := node tools/coverage-report.mjs
-QUALITY_EXTRA_TARGETS := chart-check
+QUALITY_EXTRA_TARGETS := chart-check format-check
 include docker/quality.mk
 .PHONY: browser-image test-browser game-image
 game-image:
@@ -27,6 +27,10 @@ help:
 	@echo "install lint typecheck test-unit test-browser test build run image"
 install:
 	npm ci
+format-check:
+	npm run format-check
+format:
+	npm run format
 lint:
 	npm run lint
 	npm run format:check

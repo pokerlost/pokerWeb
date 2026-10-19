@@ -1,42 +1,42 @@
 <script setup lang="ts">
-import { onBeforeUnmount, onMounted, ref, watch } from 'vue'
-import { mountGame, type MountedGame } from '../game/loader'
-import { bridgeVersion, type GameContext } from '../game/bridge'
-const props = defineProps<{ preview: boolean; theme: 'light' | 'dark' }>()
-const emit = defineEmits<{ return: [] }>()
-const element = ref<HTMLElement>()
-const state = ref<'loading' | 'ready' | 'error'>('loading')
-const abort = new AbortController()
-const instance = Array.from(crypto.getRandomValues(new Uint8Array(16)), (byte) =>
-  byte.toString(16).padStart(2, '0'),
-).join('')
-let mounted: MountedGame | undefined
+import { onBeforeUnmount, onMounted, ref, watch } from "vue";
+import { mountGame, type MountedGame } from "../game/loader";
+import { bridgeVersion, type GameContext } from "../game/bridge";
+const props = defineProps<{ preview: boolean; theme: "light" | "dark" }>();
+const emit = defineEmits<{ return: [] }>();
+const element = ref<HTMLElement>();
+const state = ref<"loading" | "ready" | "error">("loading");
+const abort = new AbortController();
+const instance = Array.from(crypto.getRandomValues(new Uint8Array(16)), byte =>
+  byte.toString(16).padStart(2, "0"),
+).join("");
+let mounted: MountedGame | undefined;
 const configuration = (): GameContext => ({
   version: bridgeVersion,
   instance,
   theme: props.theme,
-  locale: 'en',
+  locale: "en",
   preview: props.preview,
-})
+});
 onMounted(async () => {
   try {
     mounted = await mountGame(element.value!, configuration(), abort.signal, (kind) => {
-      if (kind === 'return') emit('return')
-      else state.value = kind
-    })
-    mounted.update(configuration())
+      if (kind === "return") emit("return");
+      else state.value = kind;
+    });
+    mounted.update(configuration());
   } catch {
-    if (!abort.signal.aborted) state.value = 'error'
+    if (!abort.signal.aborted) state.value = "error";
   }
-})
+});
 watch(
   () => [props.preview, props.theme],
   () => mounted?.update(configuration()),
-)
+);
 onBeforeUnmount(() => {
-  abort.abort()
-  mounted?.dispose()
-})
+  abort.abort();
+  mounted?.dispose();
+});
 </script>
 <template>
   <section class="game-shell" aria-label="Game area" :aria-busy="state === 'loading'">

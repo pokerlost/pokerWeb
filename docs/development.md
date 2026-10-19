@@ -35,3 +35,33 @@ For an optional native Node development loop use `npm ci --ignore-scripts` and
 See [delivery](release_guide.md), [static hosting](deployment.md) and
 [architecture](architecture.md). Native Flutter client delivery is deferred; shared gameplay
 and web delivery remain supported.
+
+## Frontend style and boundaries
+
+This page owns common frontend architecture, documentation and verification rules.
+ESLint 10, typescript-eslint, eslint-plugin-vue and locked ESLint Stylistic 5.10.0
+own JS/TS/Vue formatting: statement semicolons, double ordinary quotes, native
+template literals for interpolation, and double HTML attributes. Escapes and
+protocol values keep their meaning. Nested Vue expressions retain valid syntax;
+move genuinely complex expressions into a typed computed value. Prettier owns
+JSON, Markdown, HTML and standalone CSS only; its ignore file excludes code.
+
+`npm run format` writes through those tools; `npm run format-check` checks without
+writing. A second format must make no change. `tools/style.test.mjs` checks real
+syntax-aware fixes, preserved string values, Vue attributes and idempotence.
+Docker and CLI use the same root configs and package lock, without editor settings.
+
+Vue 3 Composition API owns pages and the embedding host, Flutter owns the shared
+gameplay UI. Components render and emit typed events; reusable reactive behavior
+may use composables, while pure functions stay plain functions. Keep local state
+local. Validate external bridge messages at runtime, use closed typed states and
+explicit stable wire values, and reject unknown variants. Dispose listeners,
+timers, requests, subscriptions and Flutter views with their owner lifecycle.
+Strict TypeScript and separate vue-tsc remain mandatory; casts do not replace
+validation. Existing design tokens, keyboard focus and responsive behavior remain.
+
+README describes actual scope, verified quickstart, access and limits; architecture
+explains ownership. CONTRIBUTING links commands and AGENTS adds agent boundaries.
+No personal resume, private credentials or unverified commercial claims belong here.
+Dart follows [pokerClient's language rules](https://github.com/pokerlost/pokerClient/blob/main/docs/flutter-toolchain.md),
+not JavaScript quote or semicolon rules. Web delivery is the supported acceptance.

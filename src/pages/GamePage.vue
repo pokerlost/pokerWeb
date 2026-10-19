@@ -1,21 +1,21 @@
 <script setup lang="ts">
-import { ref } from 'vue'
-import { useRouter } from 'vue-router'
-import PokerGameHost from '../components/PokerGameHost.vue'
-const router = useRouter()
-const preview = ref(false)
-const dark = ref(true)
-const fullscreen = ref<HTMLElement>()
+import { ref } from "vue";
+import { useRouter } from "vue-router";
+import PokerGameHost from "../components/PokerGameHost.vue";
+const router = useRouter();
+const preview = ref(false);
+const dark = ref(true);
+const fullscreen = ref<HTMLElement>();
 async function toggleFullscreen() {
   try {
-    if (document.fullscreenElement) await document.exitFullscreen()
-    else await fullscreen.value!.requestFullscreen()
-    fullscreenError.value = false
+    if (document.fullscreenElement) await document.exitFullscreen();
+    else await fullscreen.value!.requestFullscreen();
+    fullscreenError.value = false;
   } catch {
-    fullscreenError.value = true
+    fullscreenError.value = true;
   }
 }
-const fullscreenError = ref(false)
+const fullscreenError = ref(false);
 </script>
 <template>
   <section ref="fullscreen" class="table-page">
