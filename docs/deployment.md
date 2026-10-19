@@ -1,6 +1,6 @@
 # Static deployment
 
-From the exact pokerClient root, run `make install` and `make export-web ARTIFACT_OUTPUT=/absolute/fresh/poker-game-web` using its pinned Flutter/Dart SDK, then pin the clean reviewed commit. The exporter is Dart; no Python client or sibling template is required. Pin its full commit and manifest SHA256 in `game-artifact.lock.json`. The installer checks inventory, symlinks, every file checksum and bridge version. The directory `/game/<manifest SHA256>/` is immutable. Entry HTML uses revalidation; missing Flutter assets return 404. No service worker or external asset CDN is used.
+From the exact clean pokerClient root, run `make check export-web` with Docker/Buildx. The pinned Flutter/Dart image builds and verifies `dist/poker-game-web`; move an earlier export to a task-owned backup before creating a fresh one. The exporter is Dart; no host language SDK, Python client or sibling template is required. Review and pin its full source commit and manifest SHA256 in `game-artifact.lock.json`. The installer checks inventory, symlinks, every file checksum and bridge version. The directory `/game/<manifest SHA256>/` is immutable. Entry HTML uses revalidation; missing Flutter assets return 404. No service worker or external asset CDN is used.
 
 For a local exported directory, run `make build test-browser GAME_ARTIFACT=/absolute/path/to/poker-game-web` from this repository root. `make image GAME_ARTIFACT=/absolute/path/to/poker-game-web` uses the same directory as the standard Docker `game` named build context. For CI, the lock additionally pins `image: ghcr.io/pokerlost/poker-game-web@sha256:...`; grant only pokerWeb Actions read access to that private client package. Docker dependencies are keyed by the npm lock, separate from application sources and tests. GHA caches remain private to the source repository; browser tests always run fresh.
 
@@ -12,14 +12,17 @@ Rollback selects the previous image digest and Helm revision; client commit, art
 
 ## Reviewed image publication
 
-`WEB_IMAGE_REVIEWED_SHA` selects one exact same-repository PR head for the development
-image publisher. Both the complete source gate and actual production-browser job must
-succeed. The publisher checks this run’s source/image receipt, resolves the same cached
-BuildKit inputs, and compares the configuration before pushing to the approved private
-`ghcr.io/pokerlost/pokerweb` destination. It reads the OCI index and platform manifest
-back, checks the tested configuration again, and records the immutable reference with
-SBOM/provenance. Main pushes require source/browser acceptance and do not publish.
+Manual `delivery.yml` accepts a full `reviewed_sha` and successful same-repository
+`verified_run_id` from `ci.yml`. Both actor and triggering actor must be `serrja`, and
+the selected ref SHA must equal `WEB_IMAGE_REVIEWED_SHA`. It downloads the exact CI
+candidate, loads its archive and checks the source/image receipt. A cached BuildKit
+solve must match that tested configuration before publication to the approved private
+`ghcr.io/pokerlost/pokerweb` destination. The OCI readback must remain private and match
+the tested image; SBOM/provenance accompany publication. Main pushes run CI and do not
+publish. A skipped admission or failed publication fails the delivery result.
 
-The browser and publisher need package read access to the pinned gameplay artifact.
-Missing ACL or incomplete coverage keeps the mandatory gate failed; publication does
-not bypass it. Registry authentication exists only in a temporary job directory.
+The browser and publisher require actual package Read access to the pinned gameplay
+artifact. Access, test, type, build and invalid-report failures block acceptance;
+measured coverage below 100% emits a warning and remains successful. Registry
+authentication exists only in a temporary job directory. See the
+[delivery guide](release_guide.md) for the complete boundary and recovery procedure.
