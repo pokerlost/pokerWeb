@@ -1,55 +1,47 @@
+import { z } from "zod";
+
 export const bridgeVersion = 1 as const;
-export interface GameContext {
-  version: 1;
-  instance: string;
-  theme: "light" | "dark";
-  locale: "en";
-  preview: boolean;
-}
-export interface GameEvent {
-  version: 1;
-  instance: string;
-  viewId: number;
-  kind: "ready" | "error" | "return";
-  capabilities: ["preview", "theme", "return"];
-}
-function record(value: unknown, keys: string[]): Record<string, unknown> {
-  if (
-    !value
-    || typeof value !== "object"
-    || Array.isArray(value)
-    || Object.keys(value).some(key => !keys.includes(key))
-    || keys.some(key => !Object.hasOwn(value, key))
-  )
-    throw new Error("Invalid bridge object");
-  return value as Record<string, unknown>;
-}
+export const gameTheme = { light: "light", dark: "dark" } as const;
+export const gameEventKind = { ready: "ready", error: "error", return: "return" } as const;
+export const bridgeChannel = { context: "poker-context", event: "poker-event" } as const;
+export type GameTheme = (typeof gameTheme)[keyof typeof gameTheme];
+export type GameEventKind = (typeof gameEventKind)[keyof typeof gameEventKind];
+
+const instance = z.string().regex(/^[a-zA-Z0-9_-]{1,64}$/);
+const contextSchema = z.strictObject({
+  version: z.literal(bridgeVersion),
+  instance,
+  theme: z.enum(gameTheme),
+  locale: z.literal("en"),
+  preview: z.boolean(),
+});
+const eventFields = {
+  version: z.literal(bridgeVersion),
+  instance,
+  viewId: z.number().int().min(0).max(Number.MAX_SAFE_INTEGER),
+  capabilities: z.tuple([z.literal("preview"), z.literal("theme"), z.literal("return")]),
+};
+const eventSchema = z.discriminatedUnion("kind", [
+  z.strictObject({ ...eventFields, kind: z.literal(gameEventKind.ready) }),
+  z.strictObject({ ...eventFields, kind: z.literal(gameEventKind.error) }),
+  z.strictObject({ ...eventFields, kind: z.literal(gameEventKind.return) }),
+]);
+export type GameContext = z.infer<typeof contextSchema>;
+export type GameEvent = z.infer<typeof eventSchema>;
+
 export function context(value: unknown): GameContext {
-  const data = record(value, ["version", "instance", "theme", "locale", "preview"]);
-  if (
-    data.version !== bridgeVersion
-    || typeof data.instance !== "string"
-    || !/^[a-zA-Z0-9_-]{1,64}$/.test(data.instance)
-    || typeof data.theme !== "string"
-    || !["light", "dark"].includes(data.theme)
-    || data.locale !== "en"
-    || typeof data.preview !== "boolean"
-  )
+  const result = contextSchema.safeParse(value);
+  // Reject inherited fields just as the v1 wire contract requires. Zod owns
+  // types/shape constraints; this boundary owns own-property transport semantics.
+  if (!result.success || !value || typeof value !== "object"
+    || !Object.keys(result.data).every(key => Object.hasOwn(value, key)))
     throw new Error("Incompatible game context");
-  return { ...data } as unknown as GameContext;
+  return result.data;
 }
 export function event(value: unknown): GameEvent {
-  const data = record(value, ["version", "instance", "viewId", "kind", "capabilities"]);
-  if (
-    data.version !== bridgeVersion
-    || typeof data.instance !== "string"
-    || !/^[a-zA-Z0-9_-]{1,64}$/.test(data.instance)
-    || !Number.isSafeInteger(data.viewId)
-    || Number(data.viewId) < 0
-    || typeof data.kind !== "string"
-    || !["ready", "error", "return"].includes(data.kind)
-    || JSON.stringify(data.capabilities) !== "[\"preview\",\"theme\",\"return\"]"
-  )
+  const result = eventSchema.safeParse(value);
+  if (!result.success || !value || typeof value !== "object"
+    || !Object.keys(result.data).every(key => Object.hasOwn(value, key)))
     throw new Error("Invalid game event");
-  return data as unknown as GameEvent;
+  return result.data;
 }

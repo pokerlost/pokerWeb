@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { context, event } from "../bridge";
+import { context, event } from "@/game/bridge";
+import corpus from "./fixtures/bridge-v1.json";
 const configuration = { version: 1, instance: "test_1", theme: "dark", locale: "en", preview: true };
 const message = {
   version: 1,
@@ -9,6 +10,18 @@ const message = {
   capabilities: ["preview", "theme", "return"],
 };
 describe("small runtime-validated Dart/TypeScript bridge declarations", () => {
+  it("matches the shared Dart-owned protocol corpus", () => {
+    for (const value of corpus.validContexts) expect(context(value)).toEqual(value);
+    for (const value of corpus.invalidContexts)
+      expect(() => context(value)).toThrow("Incompatible game context");
+    for (const value of corpus.events) expect(event(value)).toEqual(value);
+  });
+  it("rejects unknown events and hides schema input in errors", () => {
+    expect(() => event({ ...message, kind: "unknown", token: "synthetic-private-value" }))
+      .toThrow("Invalid game event");
+    expect(() => context({ ...configuration, preview: "synthetic-private-value" }))
+      .toThrow("Incompatible game context");
+  });
   it("copies supported context without retaining caller mutation", () => {
     const source = { ...configuration };
     const parsed = context(source);

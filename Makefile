@@ -10,6 +10,9 @@ BUILD_COMMAND = $(DOCKER) buildx build $(DOCKER_BUILD_ARGS) --build-context game
 COVERAGE_COMMAND := node tools/coverage-report.mjs
 QUALITY_EXTRA_TARGETS := chart-check format-check
 include docker/quality.mk
+.PHONY: format
+format: quality-image
+	$(DOCKER) run --init --rm --read-only --network none --tmpfs /tmp:rw,mode=1777,size=512m --user "$$(id -u):$$(id -g)" --mount "type=bind,source=$(CURDIR),target=/app" --mount "type=bind,source=$(CURDIR)/.git,target=/app/.git,readonly" --mount "type=volume,target=/app/node_modules" --workdir /app --env CONTAINERIZED=1 $(QUALITY_IMAGE) make format
 .PHONY: browser-image test-browser game-image
 game-image:
 	@printf "%s\n" "$(GAME_ARTIFACT)" | sed "s,^docker-image://,,"

@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { ref } from "vue";
 import { useRouter } from "vue-router";
-import PokerGameHost from "../components/PokerGameHost.vue";
+import PokerGameHost from "@/components/PokerGameHost.vue";
 const router = useRouter();
 const preview = ref(false);
 const dark = ref(true);
@@ -9,7 +9,11 @@ const fullscreen = ref<HTMLElement>();
 async function toggleFullscreen() {
   try {
     if (document.fullscreenElement) await document.exitFullscreen();
-    else await fullscreen.value!.requestFullscreen();
+    else {
+      const target = fullscreen.value;
+      if (!target) throw new Error("Fullscreen target unavailable");
+      await target.requestFullscreen();
+    }
     fullscreenError.value = false;
   } catch {
     fullscreenError.value = true;

@@ -24,10 +24,10 @@
     }
   },
   "rules": {
-    "contributing": "docs/contributing.md",
-    "naming": "docs/naming.md",
-    "testing": "docs/testing.md",
-    "versioning": "docs/versioning.md"
+    "contributing": "https://github.com/serrja/pythonTemplate/blob/main/docs/contributing.md",
+    "naming": "https://github.com/pokerlost/pokerWeb/blob/main/docs/development.md",
+    "testing": "https://github.com/pokerlost/pokerWeb/blob/main/docs/development.md",
+    "versioning": "https://github.com/serrja/pythonTemplate/blob/main/docs/versioning.md"
   },
   "codeowners": "Project-specific assignment; not inherited from the template.",
   "role": "Reviewed portable engineering snapshots; no active scaffold restoration or template-update dependency."

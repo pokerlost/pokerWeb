@@ -60,6 +60,14 @@ timers, requests, subscriptions and Flutter views with their owner lifecycle.
 Strict TypeScript and separate vue-tsc remain mandatory; casts do not replace
 validation. Existing design tokens, keyboard focus and responsive behavior remain.
 
+Cross-parent source imports use the existing `@/` Vite/TypeScript alias; the root
+artifact lock uses native `#game-artifact` package imports. ESLint rejects `../`
+imports. Local sibling imports remain valid. The bridge boundary uses locked Zod
+schemas with derived TypeScript types and sanitized errors; pokerClient owns the
+shared protocol fixture corpus and explicit Dart wire codecs. View loading/ready
+states belong to the host, while engine/view timeouts carry milliseconds at their
+loader owner. No gameplay algorithms or trusted server state move into Vue.
+
 README describes actual scope, verified quickstart, access and limits; architecture
 explains ownership. CONTRIBUTING links commands and AGENTS adds agent boundaries.
 No personal resume, private credentials or unverified commercial claims belong here.

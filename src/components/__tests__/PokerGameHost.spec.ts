@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { mount, flushPromises, type VueWrapper } from "@vue/test-utils";
-import PokerGameHost from "../PokerGameHost.vue";
-import type { FlutterApp } from "../../game/loader";
+import PokerGameHost from "@/components/PokerGameHost.vue";
+import type { FlutterApp } from "@/game/loader";
 let wrapper: VueWrapper | undefined;
 const app = {
   addView: vi.fn<FlutterApp["addView"]>(() => 3),

@@ -1,5 +1,5 @@
-import { context, event, type GameContext } from "./bridge";
-import artifact from "../../game-artifact.lock.json";
+import { bridgeChannel, context, event, gameEventKind, type GameContext, type GameEventKind } from "./bridge";
+import artifact from "#game-artifact";
 
 export interface FlutterApp {
   addView(options: { hostElement: HTMLElement; initialData: GameContext }): number;
@@ -16,6 +16,8 @@ declare global {
   }
 }
 const runtime = (window.pokerEmbedRuntime ??= {});
+const engineLoadTimeoutMs = 30_000;
+const viewReadyTimeoutMs = 30_000;
 
 export function loadEngine(): Promise<FlutterApp> {
   if (runtime.engine) return runtime.engine;
@@ -23,7 +25,7 @@ export function loadEngine(): Promise<FlutterApp> {
     const script = document.createElement("script");
     script.src = "/game/" + artifact.manifestSha256 + "/flutter_bootstrap.js";
     script.async = true;
-    const timeout = window.setTimeout(() => reject(new Error("Game assets timed out")), 30000);
+    const timeout = window.setTimeout(() => reject(new Error("Game assets timed out")), engineLoadTimeoutMs);
     const complete = () => window.clearTimeout(timeout);
     script.onload = () => {
       if (!window.pokerFlutter) {
@@ -57,7 +59,7 @@ export async function mountGame(
   host: HTMLElement,
   value: GameContext,
   signal: AbortSignal,
-  notify: (kind: "ready" | "error" | "return") => void,
+  notify: (kind: GameEventKind) => void,
 ): Promise<MountedGame> {
   const initial = context(value);
   if (runtime.lease) throw new Error("A game view is already active");
@@ -70,21 +72,23 @@ export async function mountGame(
   let latest = initial;
   let ready = false;
   const sendContext = () =>
-    host.dispatchEvent(new CustomEvent("poker-context", { detail: JSON.stringify(latest) }));
+    host.dispatchEvent(new CustomEvent(bridgeChannel.context, { detail: JSON.stringify(latest) }));
   const dispose = () => {
     if (disposed) return;
     disposed = true;
     window.clearTimeout(readyTimeout);
-    host.removeEventListener("poker-event", receive);
+    host.removeEventListener(bridgeChannel.event, receive);
     signal.removeEventListener("abort", dispose);
-    if (viewId !== undefined) app!.removeView(viewId);
+    if (viewId !== undefined && app) app.removeView(viewId);
     if (runtime.lease === ownLease) delete runtime.lease;
   };
   const receive = (raw: Event) => {
     if (raw.target !== host || disposed) return;
     let message;
     try {
-      const payload: unknown = JSON.parse((raw as CustomEvent<string>).detail);
+      if (!(raw instanceof CustomEvent) || typeof raw.detail !== "string")
+        throw new Error("Invalid game event transport");
+      const payload: unknown = JSON.parse(raw.detail);
       if (
         payload
         && typeof payload === "object"
@@ -94,12 +98,12 @@ export async function mountGame(
         return;
       message = event(payload);
     } catch {
-      notify("error");
+      notify(gameEventKind.error);
       return;
     }
     if (message.instance !== initial.instance || message.viewId !== viewId) return;
     window.clearTimeout(readyTimeout);
-    if (message.kind === "ready") {
+    if (message.kind === gameEventKind.ready) {
       ready = true;
       sendContext();
     }
@@ -110,9 +114,9 @@ export async function mountGame(
     if (signal.aborted) throw new DOMException("Cancelled", "AbortError");
     app = await loadEngine();
     if (disposed) throw new DOMException("Cancelled", "AbortError");
-    host.addEventListener("poker-event", receive);
+    host.addEventListener(bridgeChannel.event, receive);
     viewId = app.addView({ hostElement: host, initialData: initial });
-    readyTimeout = window.setTimeout(() => notify("error"), 30000);
+    readyTimeout = window.setTimeout(() => notify(gameEventKind.error), viewReadyTimeoutMs);
     return {
       dispose,
       update: (value) => {

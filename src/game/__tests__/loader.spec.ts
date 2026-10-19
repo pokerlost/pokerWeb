@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
-import type { FlutterApp } from "../loader";
+import type { FlutterApp } from "@/game/loader";
 const configuration = {
   version: 1 as const,
   instance: "test_1",

@@ -1,11 +1,13 @@
 <script setup lang="ts">
 import { onBeforeUnmount, onMounted, ref, watch } from "vue";
-import { mountGame, type MountedGame } from "../game/loader";
-import { bridgeVersion, type GameContext } from "../game/bridge";
-const props = defineProps<{ preview: boolean; theme: "light" | "dark" }>();
+import { mountGame, type MountedGame } from "@/game/loader";
+import { bridgeVersion, gameEventKind, type GameContext, type GameTheme } from "@/game/bridge";
+const props = defineProps<{ preview: boolean; theme: GameTheme }>();
 const emit = defineEmits<{ return: [] }>();
 const element = ref<HTMLElement>();
-const state = ref<"loading" | "ready" | "error">("loading");
+const hostState = { loading: "loading", ready: "ready", error: "error" } as const;
+type HostState = (typeof hostState)[keyof typeof hostState];
+const state = ref<HostState>(hostState.loading);
 const abort = new AbortController();
 const instance = Array.from(crypto.getRandomValues(new Uint8Array(16)), byte =>
   byte.toString(16).padStart(2, "0"),
@@ -20,13 +22,28 @@ const configuration = (): GameContext => ({
 });
 onMounted(async () => {
   try {
-    mounted = await mountGame(element.value!, configuration(), abort.signal, (kind) => {
-      if (kind === "return") emit("return");
-      else state.value = kind;
+    const host = element.value;
+    if (!host) throw new Error("Game host unavailable");
+    mounted = await mountGame(host, configuration(), abort.signal, (kind) => {
+      switch (kind) {
+        case gameEventKind.return:
+          emit("return");
+          break;
+        case gameEventKind.ready:
+          state.value = hostState.ready;
+          break;
+        case gameEventKind.error:
+          state.value = hostState.error;
+          break;
+        default: {
+          const unexpected: never = kind;
+          throw new Error(`Unknown game event: ${unexpected}`);
+        }
+      }
     });
     mounted.update(configuration());
   } catch {
-    if (!abort.signal.aborted) state.value = "error";
+    if (!abort.signal.aborted) state.value = hostState.error;
   }
 });
 watch(
@@ -39,9 +56,9 @@ onBeforeUnmount(() => {
 });
 </script>
 <template>
-  <section class="game-shell" aria-label="Game area" :aria-busy="state === 'loading'">
-    <p v-if="state === 'loading'" role="status">Loading the game area…</p>
-    <p v-if="state === 'error'" role="alert">
+  <section class="game-shell" aria-label="Game area" :aria-busy="state === hostState.loading">
+    <p v-if="state === hostState.loading" role="status">Loading the game area…</p>
+    <p v-if="state === hostState.error" role="alert">
       The game area could not load. Reload the page to retry.
     </p>
     <div ref="element" class="game-host" tabindex="0" aria-label="Poker table" />
