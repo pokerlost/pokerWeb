@@ -1,0 +1,6 @@
+{
+  "clientCommit": "295ce5f1800e0806e1cad9e64946ed589bc09a02",
+  "manifestSha256": "21a2af989399909d5c0fae4d1bd3b7140c66fc383e632b12ceeec7c052c869f2",
+  "bridgeVersion": 1,
+  "image": "ghcr.io/pokerlost/poker-game-web@sha256:7b84e9f738580ac1454eba13216b97ed475089204fadf5dfdbab76c4c7fff1bd"
+}

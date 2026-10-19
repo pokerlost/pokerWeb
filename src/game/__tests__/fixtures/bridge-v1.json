@@ -1,0 +1,111 @@
+{
+  "schemaVersion": 1,
+  "validContexts": [
+    {
+      "version": 1,
+      "instance": "test_1",
+      "theme": "dark",
+      "locale": "en",
+      "preview": true
+    },
+    {
+      "version": 1,
+      "instance": "test_1",
+      "theme": "light",
+      "locale": "en",
+      "preview": false
+    }
+  ],
+  "invalidContexts": [
+    null,
+    false,
+    1,
+    [],
+    {},
+    {
+      "version": 1,
+      "instance": "test_1",
+      "theme": "dark",
+      "locale": "en",
+      "preview": true,
+      "secret": "synthetic-private-value"
+    },
+    {
+      "version": 2,
+      "instance": "test_1",
+      "theme": "dark",
+      "locale": "en",
+      "preview": true
+    },
+    {
+      "version": 1,
+      "instance": "bad id",
+      "theme": "dark",
+      "locale": "en",
+      "preview": true
+    },
+    {
+      "version": 1,
+      "instance": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+      "theme": "dark",
+      "locale": "en",
+      "preview": true
+    },
+    {
+      "version": 1,
+      "instance": "test_1",
+      "theme": "system",
+      "locale": "en",
+      "preview": true
+    },
+    {
+      "version": 1,
+      "instance": "test_1",
+      "theme": "dark",
+      "locale": "ru",
+      "preview": true
+    },
+    {
+      "version": 1,
+      "instance": "test_1",
+      "theme": "dark",
+      "locale": "en",
+      "preview": "true"
+    }
+  ],
+  "events": [
+    {
+      "version": 1,
+      "instance": "test_1",
+      "viewId": 7,
+      "kind": "ready",
+      "capabilities": [
+        "preview",
+        "theme",
+        "return"
+      ]
+    },
+    {
+      "version": 1,
+      "instance": "test_1",
+      "viewId": 7,
+      "kind": "error",
+      "capabilities": [
+        "preview",
+        "theme",
+        "return"
+      ]
+    },
+    {
+      "version": 1,
+      "instance": "test_1",
+      "viewId": 7,
+      "kind": "return",
+      "capabilities": [
+        "preview",
+        "theme",
+        "return"
+      ]
+    }
+  ]
+}

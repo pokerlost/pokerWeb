@@ -1,0 +1,7 @@
+{
+  "repository": "https://github.com/pokerlost/pokerClient",
+  "source": "contracts/bridge-v1-fixtures.json",
+  "sha256": "908d4ea2839b1678a29cc63771858a8a8d1b1876fd05140aff02f102912c767f",
+  "revision": "fabc47e4945785f83c8aa0aa4eca0ac9e9e763da",
+  "role": "Reviewed Dart-owned bridge v1 corpus; both language decoders exercise identical bytes."
+}

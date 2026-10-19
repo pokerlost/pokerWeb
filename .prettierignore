@@ -1,0 +1,8 @@
+**/*.{js,mjs,cjs,ts,mts,cts,tsx,vue,dart}
+node_modules/
+coverage/
+dist/
+public/game/
+.local/
+.vscode/
+.serena/
