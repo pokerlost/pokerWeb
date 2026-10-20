@@ -79,6 +79,30 @@ jobs:
           test "$(cat dist/verified/source-commit.txt)" = "$SOURCE_SHA"
           docker save pokerweb:candidate | gzip --no-name > dist/verified/runtime-image.docker.tar.gz
           sha256sum dist/verified/runtime-image.docker.tar.gz > dist/verified/runtime-image.sha256
+      - name: Export the tested graph with SBOM and provenance in the same workspace
+        id: verified_oci
+        uses: docker/build-push-action@263435318d21b8e681c14492fe198d362a7d2c83 # v6.18.0
+        with:
+          context: .
+          target: runtime
+          outputs: type=oci,dest=dist/verified/runtime-image.oci.tar,rewrite-timestamp=true
+          tags: pokerweb:candidate
+          build-args: SOURCE_COMMIT=${{ github.event.pull_request.head.sha || github.sha }}
+          build-contexts: game=docker-image://${{ steps.game.outputs.image }}
+          cache-from: type=gha,scope=${{ github.repository_id }}-runtime-node24-linux-amd64-${{ github.event_name == 'pull_request' && 'review' || 'trusted' }}
+          sbom: true
+          provenance: mode=max
+      - name: Bind the attested OCI graph to the exact freshly tested configuration
+        env:
+          OCI_CONFIG_ID: ${{ steps.verified_oci.outputs.imageid }}
+          OCI_ROOT_DIGEST: ${{ steps.verified_oci.outputs.digest }}
+        run: |
+          set -euo pipefail
+          test "$OCI_CONFIG_ID" = "$(cat dist/verified/tested-image-id.txt)"
+          [[ "$OCI_ROOT_DIGEST" =~ ^sha256:[0-9a-f]{64}$ ]]
+          printf '%s\n' "$OCI_ROOT_DIGEST" > dist/verified/runtime-image.oci-digest.txt
+          cd dist/verified
+          sha256sum runtime-image.oci.tar > runtime-image.oci.sha256
       - name: Advisory coverage table
         if: always()
         run: test ! -f coverage/summary.md || cat coverage/summary.md >> "$GITHUB_STEP_SUMMARY"
