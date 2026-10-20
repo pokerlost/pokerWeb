@@ -9,6 +9,7 @@ const semver = /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(?:-[0-9A-Za-z.-]+)?(?:
 const packageInfo = json("package.json");
 const lock = json("package-lock.json");
 const game = json("game-artifact.lock.json");
+const gameDirectory = `dist/game/${game.manifestSha256}`;
 const chartScalar = (key) => {
   const values = [...readFileSync("deploy/chart/Chart.yaml", "utf8").matchAll(new RegExp(`^${key}: ([^\\s]+)$`, "gm"))];
   if (values.length !== 1) throw new Error(`Expected one plain chart ${key}`);
@@ -28,7 +29,7 @@ function releaseCheck() {
   if (source.dirty) throw new Error("Release readiness requires clean reviewed source");
   if (built.version !== expected.application || built.sourceCommit !== source.commit
     || built.clientCommit !== game.clientCommit || built.bridgeVersion !== game.bridgeVersion) throw new Error("Built application identity mismatch");
-  if (hash("dist/game/artifact-manifest.json") !== game.manifestSha256) throw new Error("Built client manifest mismatch");
+  if (hash(`${gameDirectory}/artifact-manifest.json`) !== game.manifestSha256) throw new Error("Built client manifest mismatch");
   const tested = readFileSync("coverage/source-commit.txt", "utf8").trim();
   if (tested !== source.commit) throw new Error("Browser acceptance source mismatch");
   const image = json("coverage/runtime-image.json")[0];
@@ -41,8 +42,8 @@ function releaseCheck() {
   console.log("Application, chart, lock, built client and browser source versions agree.");
 }
 function artifacts() {
-  return ["dist/version.json", "dist/index.html", "dist/game/artifact-manifest.json", "coverage/tested-image-id.txt", `coverage/chart/poker-web-${versions().chart}.tgz`]
-    .filter(existsSync).map(path => ({ path, sha256: hash(path), version: path.endsWith(".tgz") ? versions().chart : path.includes("/game/") ? json("dist/game/version.json").version : packageInfo.version }));
+  return ["dist/version.json", "dist/index.html", `${gameDirectory}/artifact-manifest.json`, "coverage/tested-image-id.txt", `coverage/chart/poker-web-${versions().chart}.tgz`]
+    .filter(existsSync).map(path => ({ path, sha256: hash(path), version: path.endsWith(".tgz") ? versions().chart : path.includes("/game/") ? json(`${gameDirectory}/version.json`).version : packageInfo.version }));
 }
 function receipt(args) {
   const file = "coverage/ci-local.json";
