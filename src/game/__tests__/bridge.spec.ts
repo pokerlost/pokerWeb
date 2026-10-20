@@ -1,6 +1,9 @@
 import { describe, expect, it } from "vitest";
+
 import { context, event } from "@/game/bridge";
+
 import corpus from "./fixtures/bridge-v1.json";
+
 const configuration = { version: 1, instance: "test_1", theme: "dark", locale: "en", preview: true };
 const message = {
   version: 1,

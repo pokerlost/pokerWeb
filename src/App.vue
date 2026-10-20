@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { RouterLink, RouterView } from "vue-router";
 </script>
+
 <template>
   <a class="skip-link" href="#content">Skip to content</a>
   <header class="site-header">
@@ -14,6 +15,7 @@ import { RouterLink, RouterView } from "vue-router";
   <main id="content" tabindex="-1"><RouterView /></main>
   <footer>Shared table foundation · Preview only</footer>
 </template>
+
 <style>
 :root {
   color-scheme: light;

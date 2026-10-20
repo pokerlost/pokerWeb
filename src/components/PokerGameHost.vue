@@ -1,7 +1,9 @@
 <script setup lang="ts">
 import { onBeforeUnmount, onMounted, ref, watch } from "vue";
+
 import { mountGame, type MountedGame } from "@/game/loader";
 import { bridgeVersion, gameEventKind, type GameContext, type GameTheme } from "@/game/bridge";
+
 const props = defineProps<{ preview: boolean; theme: GameTheme }>();
 const emit = defineEmits<{ return: [] }>();
 const element = ref<HTMLElement>();
@@ -55,6 +57,7 @@ onBeforeUnmount(() => {
   mounted?.dispose();
 });
 </script>
+
 <template>
   <section class="game-shell" aria-label="Game area" :aria-busy="state === hostState.loading">
     <p v-if="state === hostState.loading" role="status">Loading the game area…</p>
@@ -64,6 +67,7 @@ onBeforeUnmount(() => {
     <div ref="element" class="game-host" tabindex="0" aria-label="Poker table" />
   </section>
 </template>
+
 <style scoped>
 .game-shell {
   position: relative;

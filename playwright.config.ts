@@ -1,4 +1,5 @@
 import { defineConfig, devices } from "@playwright/test";
+
 export default defineConfig({
   testDir: "./e2e",
   outputDir: process.env.POKER_WEB_RESULTS ?? "test-results",

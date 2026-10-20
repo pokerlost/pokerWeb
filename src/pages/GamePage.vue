@@ -1,7 +1,9 @@
 <script setup lang="ts">
 import { ref } from "vue";
 import { useRouter } from "vue-router";
+
 import PokerGameHost from "@/components/PokerGameHost.vue";
+
 const router = useRouter();
 const preview = ref(false);
 const dark = ref(true);
@@ -21,6 +23,7 @@ async function toggleFullscreen() {
 }
 const fullscreenError = ref(false);
 </script>
+
 <template>
   <section ref="fullscreen" class="table-page">
     <div class="table-controls">
