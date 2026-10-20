@@ -90,5 +90,4 @@ describe("native version and source receipt gates", () => {
     expect(run("receipt", "finish", "--status", "blocked").status).not.toBe(0);
     expect(JSON.parse(readFileSync(join(root, "coverage/ci-local.json"))).status).toBe("failed");
   });
-
 });
