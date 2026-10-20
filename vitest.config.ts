@@ -9,6 +9,8 @@ export default mergeConfig(
   defineConfig({
     test: {
       environment: "jsdom",
+      reporters: ["default", "junit"],
+      outputFile: { junit: "coverage/vitest/junit.xml" },
       exclude: [...configDefaults.exclude, "e2e/**"],
       root: fileURLToPath(new URL("./", import.meta.url)),
       coverage: {
