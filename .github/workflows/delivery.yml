@@ -55,6 +55,7 @@ jobs:
         with:
           context: .
           target: runtime
+          build-args: SOURCE_COMMIT=${{ inputs.reviewed_sha }}
           load: true
           tags: pokerweb:publish-candidate
           build-contexts: game=docker-image://${{ env.GAME_IMAGE }}
@@ -67,6 +68,7 @@ jobs:
         with:
           context: .
           target: runtime
+          build-args: SOURCE_COMMIT=${{ inputs.reviewed_sha }}
           push: true
           tags: ghcr.io/pokerlost/pokerweb:sha-${{ inputs.reviewed_sha }}
           build-contexts: game=docker-image://${{ env.GAME_IMAGE }}
