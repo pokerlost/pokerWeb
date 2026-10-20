@@ -108,14 +108,16 @@ function receipt(args) {
         const hasBlocked = value.checks.some(check => check.status === "blocked");
         if (hasFailure) value.status = "failed";
         else if (hasBlocked) value.status = "blocked";
-        if (requested === "passed") {
+        if (requested === "passed" && value.status === "blocked") {
+          failure = new Error("Blocked check cannot produce PASS");
+        } else if (requested === "passed") {
           if (value.status !== "passed") throw new Error("Non-passing check cannot produce PASS");
           if (JSON.stringify(value.checks.filter(check => check.name !== "offline-preflight").map(check => check.name)) !== JSON.stringify(value.plannedChecks)) throw new Error("Required checks were not executed");
         }
         value.artifacts = value.scope === "full" ? artifacts(value.status === "passed") : [];
       } catch (error) {
         failure = error;
-        if (value.status !== "blocked") value.status = "failed";
+        value.status = "failed";
         value.artifacts = [];
       }
       value.finishedAt = new Date().toISOString();

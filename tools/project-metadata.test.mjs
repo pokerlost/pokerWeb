@@ -83,4 +83,12 @@ describe("native version and source receipt gates", () => {
     const receipt = JSON.parse(readFileSync(join(root, "coverage/ci-local.json")));
     expect(receipt).toMatchObject({ scope: "scoped", status: "passed", artifacts: [] });
   });
+  it("treats source corruption as failure even in a blocked run", () => {
+    expect(run("receipt", "init").status).toBe(0);
+    expect(run("receipt", "record", "--name", "check", "--command", "make check", "--exit-code", "3").status).toBe(0);
+    write("coverage/source.json", { commit: "a".repeat(40), dirty: true, contentSha256: "c".repeat(64) });
+    expect(run("receipt", "finish", "--status", "blocked").status).not.toBe(0);
+    expect(JSON.parse(readFileSync(join(root, "coverage/ci-local.json"))).status).toBe("failed");
+  });
+
 });
