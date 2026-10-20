@@ -94,7 +94,7 @@ jobs:
           provenance: mode=max
       - name: Bind the attested OCI graph to the exact freshly tested configuration
         env:
-          OCI_CONFIG_ID: ${{ steps.verified_oci.outputs.imageid }}
+          OCI_CONFIG_ID: ${{ fromJSON(steps.verified_oci.outputs.metadata)['containerimage.config.digest'] }}
           OCI_ROOT_DIGEST: ${{ steps.verified_oci.outputs.digest }}
         run: |
           set -euo pipefail
