@@ -5,6 +5,7 @@ import pluginPlaywright from "eslint-plugin-playwright";
 import pluginVitest from "@vitest/eslint-plugin";
 import pluginOxlint from "eslint-plugin-oxlint";
 import stylistic from "@stylistic/eslint-plugin";
+import importX from "eslint-plugin-import-x";
 
 export default defineConfig(
   {
@@ -52,7 +53,17 @@ export default defineConfig(
     braceStyle: "1tbs",
   }),
   {
+    plugins: { "import-x": importX },
+    settings: { "import-x/internal-regex": "^(?:@/|#)" },
     rules: {
+      "import-x/order": ["error", {
+        "groups": ["builtin", "external", "internal", ["parent", "sibling", "index"]],
+        "newlines-between": "always",
+        "warnOnUnassignedImports": false,
+      }],
+      "import-x/newline-after-import": ["error", { count: 1, exactCount: true, considerComments: true }],
+      "@typescript-eslint/consistent-type-imports": ["error", { prefer: "type-imports" }],
+      "vue/padding-line-between-blocks": ["error", "always"],
       "@stylistic/quotes": ["error", "double", { avoidEscape: false, allowTemplateLiterals: "never" }],
       "vue/html-quotes": ["error", "double"],
       "eqeqeq": ["error", "always"],

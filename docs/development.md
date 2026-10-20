@@ -38,7 +38,7 @@ and web delivery remain supported.
 
 ## Frontend style and boundaries
 
-This page owns common frontend architecture, documentation and verification rules.
+This page owns the repository implementation of the [common frontend standard](https://github.com/serrja/baseRules/blob/main/docs/frontend.md), architecture and verification commands.
 ESLint 10, typescript-eslint, eslint-plugin-vue and locked ESLint Stylistic 5.10.0
 own JS/TS/Vue formatting: statement semicolons, double ordinary quotes, native
 template literals for interpolation, and double HTML attributes. Escapes and
@@ -50,6 +50,22 @@ JSON, Markdown, HTML and standalone CSS only; its ignore file excludes code.
 writing. A second format must make no change. `tools/style.test.mjs` checks real
 syntax-aware fixes, preserved string values, Vue attributes and idempotence.
 Docker and CLI use the same root configs and package lock, without editor settings.
+
+`eslint-plugin-import-x` 4.17.1 is the only import sorter. Its `order` rule groups
+Node built-ins (tooling only), external packages, internal `@/`/`#` aliases, then
+relative imports. Type-only imports stay in their origin group and use explicit
+`import type`. Groups and the following code have exactly one blank line; imports
+within a group stay together. `newline-after-import`, Stylistic's empty-line rule
+and Vue's `padding-line-between-blocks` enforce spacing, including script/template/style.
+Unbound CSS/polyfill imports keep their position and evaluation order: autofix never
+moves them across bound imports. An ordering error blocked by a side effect requires
+owner review; do not move the side effect merely to silence lint. Prettier does not
+sort imports. Syntax-aware fixtures cover these boundaries and a second unchanged fix.
+
+Existing `type-check`/`typecheck` and `format-check`/`format:check` aliases remain
+compatible with contributor and Docker commands. Oxlint supplies correctness checks;
+its ESLint integration disables overlapping rules. ESLint owns import/style checks.
+There is no second import sorter or formatter for code.
 
 Vue 3 Composition API owns pages and the embedding host, Flutter owns the shared
 gameplay UI. Components render and emit typed events; reusable reactive behavior
