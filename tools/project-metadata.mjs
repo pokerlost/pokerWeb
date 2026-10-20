@@ -2,6 +2,8 @@ import { createHash } from "node:crypto";
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { execFileSync } from "node:child_process";
 
+import { z } from "zod";
+
 const json = file => JSON.parse(readFileSync(file, "utf8"));
 const write = (file, data) => writeFileSync(file, `${JSON.stringify(data, null, 2)}\n`);
 const hash = file => createHash("sha256").update(readFileSync(file)).digest("hex");
@@ -41,35 +43,89 @@ function releaseCheck() {
   if (!chart.includes(`version: ${expected.chart}\n`) || !chart.includes(`appVersion: ${expected.application}\n`)) throw new Error("Packaged Helm chart version mismatch");
   console.log("Application, chart, lock, built client and browser source versions agree.");
 }
-function artifacts() {
-  return ["dist/version.json", "dist/index.html", `${gameDirectory}/artifact-manifest.json`, "coverage/tested-image-id.txt", `coverage/chart/poker-web-${versions().chart}.tgz`]
-    .filter(existsSync).map(path => ({ path, sha256: hash(path), version: path.endsWith(".tgz") ? versions().chart : path.includes("/game/") ? json(`${gameDirectory}/version.json`).version : packageInfo.version }));
+const requiredChecks = ["check", "coverage", "build", "chart", "verify", "release-check"];
+const checkName = z.enum([...requiredChecks, "offline-preflight"]);
+const sourceSchema = z.object({ commit: z.string().regex(/^[a-f0-9]{40,64}$/), dirty: z.boolean(), contentSha256: z.string().regex(/^[a-f0-9]{64}$/) }).strict();
+const checkSchema = z.object({ name: checkName, command: z.string().min(1), status: z.enum(["passed", "failed", "blocked"]), exitCode: z.number().int().min(0).max(255) }).strict();
+const planSchema = z.object({ scope: z.enum(["full", "scoped"]), checks: z.array(z.enum(requiredChecks)).min(1) }).strict();
+const receiptSchema = z.object({ schemaVersion: z.literal(1), source: sourceSchema, status: z.enum(["running", "passed", "failed", "blocked"]), scope: z.enum(["full", "scoped"]), plannedChecks: z.array(z.enum(requiredChecks)).min(1), checks: z.array(checkSchema), artifacts: z.array(z.object({ path: z.string().min(1), sha256: z.string().regex(/^[a-f0-9]{64}$/), version: z.string().min(1) }).strict()) }).passthrough();
+const stateFor = code => code === 0 ? "passed" : code === 3 ? "blocked" : "failed";
+function plan() {
+  const value = planSchema.parse(json("coverage/ci-plan.json"));
+  if (new Set(value.checks).size !== value.checks.length || (value.scope === "full" && JSON.stringify(value.checks) !== JSON.stringify(requiredChecks))) throw new Error("Invalid native CI plan");
+  return value;
+}
+function options(args, names) {
+  if (args.length !== names.length * 2) throw new Error("Missing or unexpected receipt options");
+  const result = {};
+  for (let index = 0; index < args.length; index += 2) {
+    const key = args[index];
+    const value = args[index + 1];
+    if (!names.includes(key) || Object.hasOwn(result, key) || !value || value.startsWith("--")) throw new Error("Invalid receipt option");
+    result[key] = value;
+  }
+  return result;
+}
+function validateChecks(value) {
+  const names = value.checks.map(check => check.name);
+  if (new Set(names).size !== names.length || names.slice(1).includes("offline-preflight")) throw new Error("Duplicate or misplaced check");
+  const native = names.filter(name => name !== "offline-preflight");
+  if (JSON.stringify(native) !== JSON.stringify(value.plannedChecks.slice(0, native.length)) || value.checks.some(check => check.status !== stateFor(check.exitCode))) throw new Error("Malformed check receipt");
+}
+function artifacts(required) {
+  const paths = ["dist/version.json", "dist/index.html", `${gameDirectory}/artifact-manifest.json`, `${gameDirectory}/version.json`, "coverage/tested-image-id.txt", `coverage/chart/poker-web-${versions().chart}.tgz`];
+  if (required && paths.some(path => !existsSync(path))) throw new Error("Missing required built artifact");
+  return paths.filter(path => existsSync(path) && (!path.includes("/game/") || existsSync(`${gameDirectory}/version.json`)))
+    .map(path => ({ path, sha256: hash(path), version: path.endsWith(".tgz") ? versions().chart : path.includes("/game/") ? json(`${gameDirectory}/version.json`).version : packageInfo.version }));
 }
 function receipt(args) {
   const file = "coverage/ci-local.json";
-  const option = key => args[args.indexOf(key) + 1];
+  const [operation, ...rest] = args;
   let value;
-  if (args[0] === "init") {
-    value = { schemaVersion: 1, source: json("coverage/source.json"), startedAt: new Date().toISOString(), status: "running", checks: [], artifacts: [], versions: versions(), tools: { node: process.version, npm: execFileSync("npm", ["--version"], { encoding: "utf8" }).trim(), vitest: json(new URL("../node_modules/vitest/package.json", import.meta.url)).version, vite: json(new URL("../node_modules/vite/package.json", import.meta.url)).version, eslint: json(new URL("../node_modules/eslint/package.json", import.meta.url)).version } };
+  let failure;
+  if (operation === "init") {
+    options(rest, []);
+    const currentPlan = plan();
+    value = { schemaVersion: 1, source: sourceSchema.parse(json("coverage/source.json")), scope: currentPlan.scope, plannedChecks: currentPlan.checks, startedAt: new Date().toISOString(), status: "running", checks: [], artifacts: [], versions: versions(), tools: { node: process.version, npm: execFileSync("npm", ["--version"], { encoding: "utf8" }).trim(), vitest: json(new URL("../node_modules/vitest/package.json", import.meta.url)).version, vite: json(new URL("../node_modules/vite/package.json", import.meta.url)).version, eslint: json(new URL("../node_modules/eslint/package.json", import.meta.url)).version } };
   } else {
-    value = json(file);
-    if (args[0] === "record") {
-      const exitCode = Number(option("--exit-code"));
-      if (!Number.isInteger(exitCode)) throw new Error("Invalid check exit code");
-      value.checks.push({ name: option("--name"), command: option("--command"), status: exitCode === 0 ? "passed" : "failed", exitCode });
-    } else if (args[0] === "finish") {
-      value.status = option("--status");
-      if (value.status === "passed" && (!value.checks.length || value.checks.some(check => check.exitCode !== 0))) value.status = "failed";
-      if (JSON.stringify(value.source) !== JSON.stringify(json("coverage/source.json"))) value.status = "failed";
+    value = receiptSchema.parse(json(file));
+    if (value.status !== "running") throw new Error("Receipt is already finished");
+    const currentPlan = plan();
+    if (value.scope !== currentPlan.scope || JSON.stringify(value.plannedChecks) !== JSON.stringify(currentPlan.checks)) throw new Error("CI plan changed during execution");
+    validateChecks(value);
+    if (operation === "record") {
+      const fields = options(rest, ["--name", "--command", "--exit-code"]);
+      if (!/^\d+$/.test(fields["--exit-code"])) throw new Error("Invalid check exit code");
+      const exitCode = Number(fields["--exit-code"]);
+      value.checks.push(checkSchema.parse({ name: fields["--name"], command: fields["--command"], status: stateFor(exitCode), exitCode }));
+      validateChecks(value);
+    } else if (operation === "finish") {
+      const requested = z.enum(["passed", "failed", "blocked"]).parse(options(rest, ["--status"])["--status"]);
+      value.status = requested;
+      try {
+        if (JSON.stringify(value.source) !== JSON.stringify(sourceSchema.parse(json("coverage/source.json")))) throw new Error("Source changed during local CI");
+        const hasFailure = value.checks.some(check => check.status === "failed");
+        const hasBlocked = value.checks.some(check => check.status === "blocked");
+        if (hasFailure) value.status = "failed";
+        else if (hasBlocked) value.status = "blocked";
+        if (requested === "passed") {
+          if (value.status !== "passed") throw new Error("Non-passing check cannot produce PASS");
+          if (JSON.stringify(value.checks.filter(check => check.name !== "offline-preflight").map(check => check.name)) !== JSON.stringify(value.plannedChecks)) throw new Error("Required checks were not executed");
+        }
+        value.artifacts = value.scope === "full" ? artifacts(value.status === "passed") : [];
+      } catch (error) {
+        failure = error;
+        if (value.status !== "blocked") value.status = "failed";
+        value.artifacts = [];
+      }
       value.finishedAt = new Date().toISOString();
-      value.artifacts = artifacts();
       value.coverage = { policy: "advisory", report: "coverage/vitest/coverage-summary.json", ...(existsSync("coverage/vitest/coverage-summary.json") ? { sha256: hash("coverage/vitest/coverage-summary.json") } : {}) };
-      writeFileSync("coverage/ci-local-summary.md", `# Local CI: ${value.status}\n\nSource: ${value.source.commit}; dirty: ${value.source.dirty}.\n\n${value.checks.map(check => `- ${check.name}: ${check.status} (${check.exitCode})`).join("\n")}\n`);
+      writeFileSync("coverage/ci-local-summary.md", `# Local CI (${value.scope}): ${value.status}\n\nSource: ${value.source.commit}; dirty: ${value.source.dirty}.\n\n${value.checks.map(check => `- ${check.name}: ${check.status} (${check.exitCode})`).join("\n")}\n`);
       writeFileSync("coverage/checksums.sha256", value.artifacts.map(artifact => `${artifact.sha256}  ${artifact.path}\n`).join(""));
     } else throw new Error("Unknown receipt operation");
   }
-  write(file, value);
-  if (args[0] === "finish" && value.status !== option("--status")) throw new Error("Source changed during local CI");
+  write(file, receiptSchema.parse(value));
+  if (failure) throw failure;
 }
 const [command, ...args] = process.argv.slice(2);
 if (command === "version") console.log(JSON.stringify(versions(), null, 2));

@@ -16,6 +16,9 @@ never reruns the suite. Coverage below 100% is advisory.
 
 `coverage/ci-local.json` records schema 1, source commit/dirty/content SHA-256,
 commands and exits, native tool versions, artifact hashes/versions and timestamps.
+The declared check plan is recorded as `scope` and `plannedChecks`. Only `full`
+PASS covers the complete native graph and required artifact inventory; explicit
+`scoped` runs record their checks without claiming full artifact acceptance.
 `coverage/ci-local-summary.md` and `coverage/checksums.sha256` are supporting reports;
 `coverage/summary.md` remains the coverage report. Ignored build outputs remain in
 `dist/`. A source or lock change invalidates previous evidence. A failed or blocked

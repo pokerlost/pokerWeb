@@ -18,6 +18,7 @@ describe("native version and source receipt gates", () => {
     write("package-lock.json", { version: "0.1.0-dev.0", packages: { "": { version: "0.1.0-dev.0" } } });
     write("game-artifact.lock.json", { bridgeVersion: 1, clientCommit: "a".repeat(40) });
     writeFileSync(join(root, "deploy/chart/Chart.yaml"), "version: 0.2.0-dev.0\nappVersion: 0.1.0-dev.0\n");
+    write("coverage/ci-plan.json", { scope: "full", checks: ["check", "coverage", "build", "chart", "verify", "release-check"] });
     write("coverage/source.json", { commit: "a".repeat(40), dirty: false, contentSha256: "b".repeat(64) });
   });
   afterEach(() => rmSync(root, { recursive: true, force: true }));
@@ -42,5 +43,44 @@ describe("native version and source receipt gates", () => {
     expect(run("receipt", "init").status).toBe(0);
     expect(run("receipt", "record", "--name", "check", "--command", "make check", "--exit-code", "1").status).toBe(0);
     expect(run("receipt", "finish", "--status", "passed").status).not.toBe(0);
+  });
+  it("rejects a successful prefix with missing required checks", () => {
+    expect(run("receipt", "init").status).toBe(0);
+    expect(run("receipt", "record", "--name", "check", "--command", "make check", "--exit-code", "0").status).toBe(0);
+    expect(run("receipt", "finish", "--status", "passed").status).not.toBe(0);
+    expect(JSON.parse(readFileSync(join(root, "coverage/ci-local.json"))).status).toBe("failed");
+  });
+  it("requires all built artifacts even after the complete check graph", () => {
+    expect(run("receipt", "init").status).toBe(0);
+    for (const name of ["check", "coverage", "build", "chart", "verify", "release-check"]) expect(run("receipt", "record", "--name", name, "--command", `make ${name}`, "--exit-code", "0").status).toBe(0);
+    expect(run("receipt", "finish", "--status", "passed").status).not.toBe(0);
+  });
+  it("rejects duplicate checks, missing options and invalid status", () => {
+    expect(run("receipt", "init").status).toBe(0);
+    expect(run("receipt", "record", "--name", "check", "--command", "make check").status).not.toBe(0);
+    expect(run("receipt", "record", "--name", "check", "--command", "make check", "--exit-code", "0").status).toBe(0);
+    expect(run("receipt", "record", "--name", "check", "--command", "make check", "--exit-code", "0").status).not.toBe(0);
+    expect(run("receipt", "finish", "--status", "success").status).not.toBe(0);
+  });
+  it("rejects changes to a finished or malformed receipt", () => {
+    expect(run("receipt", "init").status).toBe(0);
+    expect(run("receipt", "finish", "--status", "failed").status).toBe(0);
+    expect(run("receipt", "record", "--name", "check", "--command", "make check", "--exit-code", "0").status).not.toBe(0);
+    write("coverage/ci-local.json", { schemaVersion: 1, source: {}, status: "running", checks: [] });
+    expect(run("receipt", "finish", "--status", "passed").status).not.toBe(0);
+  });
+  it("records exit 3 as blocked and does not convert it to PASS", () => {
+    expect(run("receipt", "init").status).toBe(0);
+    expect(run("receipt", "record", "--name", "check", "--command", "make check", "--exit-code", "3").status).toBe(0);
+    expect(run("receipt", "finish", "--status", "passed").status).not.toBe(0);
+    expect(JSON.parse(readFileSync(join(root, "coverage/ci-local.json"))).status).toBe("blocked");
+  });
+  it("labels an explicit scoped plan without claiming full artifact acceptance", () => {
+    write("coverage/ci-plan.json", { scope: "scoped", checks: ["check"] });
+    expect(run("receipt", "init").status).toBe(0);
+    expect(run("receipt", "record", "--name", "check", "--command", "make check", "--exit-code", "0").status).toBe(0);
+    expect(run("receipt", "finish", "--status", "passed").status).toBe(0);
+    const receipt = JSON.parse(readFileSync(join(root, "coverage/ci-local.json")));
+    expect(receipt).toMatchObject({ scope: "scoped", status: "passed", artifacts: [] });
   });
 });
