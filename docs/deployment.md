@@ -45,3 +45,5 @@ those dependencies or the Flutter bundle notices.
 ## Reproducible image identity
 
 Native Make and Actions builds pin `SOURCE_DATE_EPOCH` to the exact source commit timestamp, using [BuildKit's supported reproducible-build input](https://docs.docker.com/build/ci/github-actions/reproducible-builds/). Wall-clock creation metadata must not change a tested configuration during private promotion. The strict tested image-ID comparison remains required; a cache hit alone is insufficient.
+
+Both Docker and OCI runtime exporters enable BuildKit rewrite-timestamp=true. SOURCE_DATE_EPOCH alone stabilizes creation metadata but does not ensure identical COPY layer metadata between fresh checkouts; strict pre/post-push image-ID checks remain in place.

@@ -5,7 +5,7 @@ QUALITY_DOCKERFILE := Dockerfile
 QUALITY_IMAGE := pokerweb:quality
 QUALITY_RUN_ARGS := --tmpfs /app/node_modules/.vite-temp:rw,mode=1777 --tmpfs /app/node_modules/.tmp:rw,mode=1777 --tmpfs /app/node_modules/.vite:rw,mode=1777
 RUNTIME_IMAGE := pokerweb:candidate
-IMAGE_COMMAND = $(DOCKER) buildx build $(DOCKER_BUILD_ARGS) --build-context game="$(GAME_ARTIFACT)" --target runtime --load --tag $(RUNTIME_IMAGE) .
+IMAGE_COMMAND = $(DOCKER) buildx build $(DOCKER_BUILD_ARGS) --build-context game="$(GAME_ARTIFACT)" --target runtime --output type=docker,rewrite-timestamp=true --tag $(RUNTIME_IMAGE) .
 VERIFY_COMMAND := /bin/sh docker/verify-browser.sh
 BUILD_COMMAND = $(DOCKER) buildx build $(DOCKER_BUILD_ARGS) --build-context game="$(GAME_ARTIFACT)" --target artifacts --output type=local,dest=dist .
 COVERAGE_COMMAND := node tools/coverage-report.mjs

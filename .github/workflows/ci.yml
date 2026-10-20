@@ -62,7 +62,7 @@ jobs:
         with:
           context: .
           target: runtime
-          load: true
+          outputs: type=docker,rewrite-timestamp=true
           tags: pokerweb:candidate
           build-args: SOURCE_COMMIT=${{ github.event.pull_request.head.sha || github.sha }}
           build-contexts: game=docker-image://${{ steps.game.outputs.image }}

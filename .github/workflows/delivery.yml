@@ -58,7 +58,7 @@ jobs:
           context: .
           target: runtime
           build-args: SOURCE_COMMIT=${{ inputs.reviewed_sha }}
-          load: true
+          outputs: type=docker,rewrite-timestamp=true
           tags: pokerweb:publish-candidate
           build-contexts: game=docker-image://${{ env.GAME_IMAGE }}
           cache-from: type=gha,scope=${{ github.repository_id }}-runtime-node24-linux-amd64-review
@@ -71,7 +71,7 @@ jobs:
           context: .
           target: runtime
           build-args: SOURCE_COMMIT=${{ inputs.reviewed_sha }}
-          push: true
+          outputs: type=image,push=true,rewrite-timestamp=true
           tags: ghcr.io/pokerlost/pokerweb:sha-${{ inputs.reviewed_sha }}
           build-contexts: game=docker-image://${{ env.GAME_IMAGE }}
           cache-from: type=gha,scope=${{ github.repository_id }}-runtime-node24-linux-amd64-review
