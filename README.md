@@ -23,6 +23,11 @@ checksum. Browser acceptance uses that actual bundle under Nginx. See
 [candidate delivery](docs/release_guide.md). Docker recipes and contribution metadata are
 reviewed snapshots with an exact source revision in `.github/engineering-source.json`.
 
+Run `make help` for native tasks, `make version` for canonical artifact versions,
+and `make ci-local` for the local required checks and `coverage/ci-local.json`.
+`make release-check` validates built artifact identity; it does not publish or tag.
+See [version and release policy](docs/versioning.md).
+
 ## 📄 License
 
 Original source/documentation uses [MIT](LICENSE). Preserve the

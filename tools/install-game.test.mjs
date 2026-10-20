@@ -1,9 +1,11 @@
 // @vitest-environment node
-import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { createHash } from "node:crypto";
 import * as fs from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { resolve } from "node:path";
+
+import { afterEach, beforeEach, expect, it, vi } from "vitest";
+
 vi.mock("node:fs/promises", async (original) => {
   const actual = await original();
   return { ...actual, rename: vi.fn(actual.rename), lstat: vi.fn(actual.lstat) };

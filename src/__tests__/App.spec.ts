@@ -1,6 +1,8 @@
 import { afterEach, expect, it } from "vitest";
 import { flushPromises } from "@vue/test-utils";
+
 import router from "@/router";
+
 let stop: (() => void) | undefined;
 afterEach(() => {
   stop?.();

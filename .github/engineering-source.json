@@ -20,7 +20,13 @@
     },
     "docker/quality.mk": {
       "source": "template/docker/quality.mk",
-      "sha256": "881cd3677effdf37503bd4c1980c0ce11403a6306bb8cdb2974779ff601fa6a4"
+      "sha256": "31f2a873741ca440de1d021e7c767dc0069c56c62ce6b859b944cc437ce098c1",
+      "revision": "b95e247bc59123decdb02e4db6d98fa761b69786"
+    },
+    "docker/source_identity.sh": {
+      "source": "template/docker/source_identity.sh",
+      "sha256": "efe087bf133fc2c4c9a02ee4a3935e77d4a39ded3b14387c3dde0d90ef25ecc7",
+      "revision": "1aaab606373980a6084ae1a69069280241fb27de"
     }
   },
   "rules": {
@@ -30,5 +36,6 @@
     "versioning": "https://github.com/serrja/pythonTemplate/blob/main/docs/versioning.md"
   },
   "codeowners": "Project-specific assignment; not inherited from the template.",
-  "role": "Reviewed portable engineering snapshots; no active scaffold restoration or template-update dependency."
+  "role": "Reviewed portable engineering snapshots; no active scaffold restoration or template-update dependency.",
+  "latestUpdateRevision": "b95e247bc59123decdb02e4db6d98fa761b69786"
 }

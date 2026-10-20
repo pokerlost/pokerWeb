@@ -1,8 +1,10 @@
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { mount, flushPromises, type VueWrapper } from "@vue/test-utils";
+
 import GamePage from "@/pages/GamePage.vue";
 import router from "@/router";
 import type { FlutterApp } from "@/game/loader";
+
 const app = {
   addView: vi.fn<FlutterApp["addView"]>(() => 9),
   removeView: vi.fn<FlutterApp["removeView"]>(),

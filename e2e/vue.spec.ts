@@ -1,4 +1,5 @@
 import { test, expect, type Page } from "@playwright/test";
+
 async function preview(page: Page) {
   await page.goto("/game");
   await page.getByLabel("Synthetic preview", { exact: true }).check();

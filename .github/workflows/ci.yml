@@ -22,7 +22,7 @@ jobs:
           install -d -m 700 "$RUNNER_TEMP/registry-auth"
           echo "DOCKER_CONFIG=$RUNNER_TEMP/registry-auth" >> "$GITHUB_ENV"
       - name: Pin image timestamps to the reviewed commit
-        run: echo "SOURCE_DATE_EPOCH=$(git log -1 --pretty=%ct)" >> "$GITHUB_ENV"
+        run: make build-metadata >> "$GITHUB_ENV"
       - uses: docker/setup-buildx-action@e468171a9de216ec08956ac3ada2f0791b6bd435 # v3.11.1
       - name: Restore quality build graph
         uses: docker/build-push-action@263435318d21b8e681c14492fe198d362a7d2c83 # v6.18.0
@@ -33,8 +33,6 @@ jobs:
           tags: pokerweb:quality
           cache-from: type=gha,scope=${{ github.repository_id }}-quality-node24-linux-amd64-${{ github.event_name == 'pull_request' && 'review' || 'trusted' }}
           cache-to: type=gha,mode=max,scope=${{ github.repository_id }}-quality-node24-linux-amd64-${{ github.event_name == 'pull_request' && 'review' || 'trusted' }}
-      - name: Fresh format, lint, types, unit tests, coverage policy and chart checks
-        run: make check
       - name: Restore browser build graph
         uses: docker/build-push-action@263435318d21b8e681c14492fe198d362a7d2c83 # v6.18.0
         with:
@@ -64,12 +62,14 @@ jobs:
           target: runtime
           outputs: type=docker,rewrite-timestamp=true
           tags: pokerweb:candidate
-          build-args: SOURCE_COMMIT=${{ github.event.pull_request.head.sha || github.sha }}
+          build-args: |
+            SOURCE_COMMIT=${{ github.event.pull_request.head.sha || github.sha }}
+            APP_VERSION=${{ env.APP_VERSION }}
           build-contexts: game=docker-image://${{ steps.game.outputs.image }}
           cache-from: type=gha,scope=${{ github.repository_id }}-runtime-node24-linux-amd64-${{ github.event_name == 'pull_request' && 'review' || 'trusted' }}
           cache-to: type=gha,mode=max,scope=${{ github.repository_id }}-runtime-node24-linux-amd64-${{ github.event_name == 'pull_request' && 'review' || 'trusted' }}
       - name: Fresh real Flutter browser acceptance and web artifact export
-        run: make build verify
+        run: make ci-local
       - name: Transfer the exact tested runtime and identity
         env: {SOURCE_SHA: '${{ github.event.pull_request.head.sha || github.sha }}'}
         run: |
@@ -87,7 +87,9 @@ jobs:
           target: runtime
           outputs: type=oci,dest=dist/verified/runtime-image.oci.tar,rewrite-timestamp=true
           tags: pokerweb:candidate
-          build-args: SOURCE_COMMIT=${{ github.event.pull_request.head.sha || github.sha }}
+          build-args: |
+            SOURCE_COMMIT=${{ github.event.pull_request.head.sha || github.sha }}
+            APP_VERSION=${{ env.APP_VERSION }}
           build-contexts: game=docker-image://${{ steps.game.outputs.image }}
           cache-from: type=gha,scope=${{ github.repository_id }}-runtime-node24-linux-amd64-${{ github.event_name == 'pull_request' && 'review' || 'trusted' }}
           sbom: true

@@ -17,14 +17,17 @@ FROM dependencies AS build
 COPY tsconfig.json tsconfig.app.json tsconfig.node.json tsconfig.vitest.json env.d.ts vite.config.ts index.html game-artifact.lock.json ./
 COPY --exclude=**/__tests__/** src/ src/
 COPY public/ public/
-COPY tools/install-game.mjs tools/install-game.mjs
+COPY tools/install-game.mjs tools/project-metadata.mjs tools/
+COPY deploy/chart/Chart.yaml deploy/chart/Chart.yaml
+ARG SOURCE_COMMIT
+ENV SOURCE_COMMIT=$SOURCE_COMMIT
 COPY --chmod=0444 LICENSE THIRD_PARTY_NOTICES.md /licenses/
 # Retain installed dependency notices without relicensing their code.
 RUN --network=none find node_modules -type f     \( -iname 'license*' -o -iname 'notice*' -o -iname 'copying*' \)     -exec cp --parents --target-directory=/licenses/ {} +
 # A named immutable client artifact input, never a second source checkout.
 COPY --from=game / /game-artifact/
 ENV POKER_GAME_ARTIFACT=/game-artifact
-RUN --network=none npm run build-only
+RUN --network=none npm run build-only && node tools/project-metadata.mjs build-version
 RUN --network=none set -eu; \
     find /licenses -type f -print0 | sort -z | xargs -0 cat > /tmp/third-party-licenses.txt; \
     license_hash="$(sha256sum /tmp/third-party-licenses.txt | cut -d ' ' -f 1)"; \
@@ -53,6 +56,8 @@ COPY --chown=101:101 --chmod=0444 deploy/environments/local.conf /etc/nginx/poke
 COPY --from=build --chown=101:101 /app/dist/ /usr/share/nginx/html/
 COPY --chmod=u=rwX,go=rX --from=build /licenses/ /licenses/
 ARG SOURCE_COMMIT=unrecorded
+ARG APP_VERSION
+LABEL org.opencontainers.image.version=$APP_VERSION
 LABEL org.opencontainers.image.revision=$SOURCE_COMMIT
 LABEL org.opencontainers.image.licenses="MIT"
 LABEL org.opencontainers.image.source="https://github.com/pokerlost/pokerWeb"

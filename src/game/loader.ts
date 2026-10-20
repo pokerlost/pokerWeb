@@ -1,5 +1,6 @@
-import { bridgeChannel, context, event, gameEventKind, type GameContext, type GameEventKind } from "./bridge";
 import artifact from "#game-artifact";
+
+import { bridgeChannel, context, event, gameEventKind, type GameContext, type GameEventKind } from "./bridge";
 
 export interface FlutterApp {
   addView(options: { hostElement: HTMLElement; initialData: GameContext }): number;

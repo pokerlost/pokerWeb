@@ -1,4 +1,5 @@
 import { z } from "zod";
+
 import { serviceIdHeader, serviceIdSchema, type ServiceId } from "./service-id";
 
 export type Authentication = { kind: "public" } | { kind: "bearer"; token: string };
