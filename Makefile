@@ -7,20 +7,34 @@ ifneq ($(CONTAINERIZED),1)
 QUALITY_DOCKERFILE := Dockerfile
 QUALITY_DIST_MOUNT = --mount "type=bind,source=$(CURDIR)/dist,target=/app/dist,readonly"
 QUALITY_IMAGE := pokerweb:quality
-QUALITY_RUN_ARGS := --tmpfs /app/node_modules/.vite-temp:rw,mode=1777 --tmpfs /app/node_modules/.tmp:rw,mode=1777 --tmpfs /app/node_modules/.vite:rw,mode=1777
+QUALITY_RUN_ARGS := --pull=never --tmpfs /app/node_modules/.vite-temp:rw,mode=1777 --tmpfs /app/node_modules/.tmp:rw,mode=1777 --tmpfs /app/node_modules/.vite:rw,mode=1777
 RUNTIME_IMAGE := pokerweb:candidate
-IMAGE_COMMAND = $(DOCKER) buildx build $(DOCKER_BUILD_ARGS) $(LOCAL_BUILD_NETWORK) --build-context game="$(GAME_ARTIFACT)" --target runtime --output type=docker,rewrite-timestamp=true --tag $(RUNTIME_IMAGE) .
+ONLINE_IMAGE_COMMAND = $(DOCKER) buildx build $(DOCKER_BUILD_ARGS) $(LOCAL_BUILD_NETWORK) --build-context game="$(GAME_ARTIFACT)" --target runtime --output type=docker,rewrite-timestamp=true --tag $(RUNTIME_IMAGE) .
 BROWSER_IMAGE ?= pokerweb:browser
 VERIFY_COMMAND = RUNTIME_IMAGE=$(RUNTIME_IMAGE) BROWSER_IMAGE=$(BROWSER_IMAGE) /bin/sh docker/verify-browser.sh
+ifeq ($(OFFLINE),1)
+BUILD_COMMAND = $(QUALITY_RUN) node tools/project-metadata.mjs check-build
+BUILD_RECEIPT_COMMAND := true
+IMAGE_COMMAND = $(MAKE) web-offline-preflight
+else
 BUILD_COMMAND = $(DOCKER) buildx build $(DOCKER_BUILD_ARGS) $(LOCAL_BUILD_NETWORK) --build-context game="$(GAME_ARTIFACT)" --target artifacts --output type=local,dest=dist .
+BUILD_RECEIPT_COMMAND = $(QUALITY_RUN) node tools/project-metadata.mjs capture-build
+IMAGE_COMMAND = $(ONLINE_IMAGE_COMMAND)
+endif
 COVERAGE_COMMAND := node tools/coverage-report.mjs
 QUALITY_EXTRA_TARGETS := chart-check format-check
 VERSION_COMMAND = $(QUALITY_RUN) node tools/project-metadata.mjs version
 RELEASE_CHECK_COMMAND = $(DOCKER) image inspect $(RUNTIME_IMAGE) > coverage/runtime-image.json && $(QUALITY_RUN) node tools/project-metadata.mjs release-check
-OFFLINE_PREFLIGHT_COMMAND = test -d "$(GAME_ARTIFACT)" && test -f "$(GAME_ARTIFACT)/artifact-manifest.json" || { echo "BLOCKED: offline Web needs the verified local bundle named by GAME_ARTIFACT." >&2; exit 2; }
+OFFLINE_PREFLIGHT_COMMAND = $(MAKE) web-offline-preflight
 CI_LOCAL_TARGETS := check coverage build chart verify release-check
 RECEIPT_COMMAND = $(QUALITY_RUN) node tools/project-metadata.mjs receipt
 include docker/quality.mk
+.PHONY: web-offline-preflight
+web-offline-preflight: source-identity
+	$(QUALITY_RUN) node tools/project-metadata.mjs check-build
+	@cmp coverage/source.json coverage/browser-source.json || { echo "BLOCKED: prepared browser source changed." >&2; exit 2; }
+	@test "$$(cat coverage/browser-image-id.txt)" = "$$($(DOCKER) image inspect $(BROWSER_IMAGE) --format '{{.Id}}')" || { echo "BLOCKED: prepared browser image missing or replaced." >&2; exit 2; }
+	$(RELEASE_CHECK_COMMAND)
 .PHONY: build-metadata
 build-metadata:
 	@printf '%s\n' 'APP_VERSION=$(APP_VERSION)' 'SOURCE_DATE_EPOCH=$(SOURCE_DATE_EPOCH)'
@@ -39,9 +53,19 @@ game-image:
 	@printf "%s\n" "$(GAME_ARTIFACT)" | sed "s,^docker-image://,,"
 
 .PHONY: browser-image test-browser
-browser-image:
+browser-image: source-identity
+ifeq ($(OFFLINE),1)
+	$(MAKE) web-offline-preflight
+else
 	$(DOCKER) buildx build $(DOCKER_BUILD_ARGS) $(LOCAL_BUILD_NETWORK) --target browser --load --tag $(BROWSER_IMAGE) .
+	@$(DOCKER) image inspect $(BROWSER_IMAGE) --format '{{.Id}}' > coverage/browser-image-id.txt
+	@cp coverage/source.json coverage/browser-source.json
+endif
+ifeq ($(OFFLINE),1)
+verify: web-offline-preflight
+else
 verify: image browser-image
+endif
 test-browser: verify
 else
 .DEFAULT_GOAL := help

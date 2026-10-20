@@ -30,6 +30,15 @@ Read ACL. A reviewed local exported directory can be supplied explicitly as
 `make verify GAME_ARTIFACT=/absolute/path/poker-game-web`; this local mode does not prove
 Actions ACL. Vue changes consume the same Flutter input without rebuilding Flutter.
 
+After a successful online `make ci-local` for the same clean source,
+`OFFLINE=1 make ci-local` verifies the complete saved static file inventory,
+source identity, runtime image ID and browser image ID before reuse. It runs the
+source suite and seven browser cases freshly on an internal network, without
+BuildKit, image pulls or a registry lookup. Missing inputs, changed bytes or
+replaced images block reuse. The saved `coverage/web-build.json` and browser
+source/image records remain separate from each fresh CI receipt. Offline reuse
+does not publish or relabel the pinned Flutter artifact.
+
 For an optional native Node development loop use `npm ci --ignore-scripts` and
 `npm run dev -- --host 127.0.0.1`; production acceptance remains Docker-owned.
 See [delivery](release_guide.md), [static hosting](deployment.md) and

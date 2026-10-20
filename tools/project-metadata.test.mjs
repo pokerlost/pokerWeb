@@ -1,5 +1,5 @@
 import { spawnSync } from "node:child_process";
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 
@@ -22,6 +22,28 @@ describe("native version and source receipt gates", () => {
     write("coverage/source.json", { commit: "a".repeat(40), dirty: false, contentSha256: "b".repeat(64) });
   });
   afterEach(() => rmSync(root, { recursive: true, force: true }));
+  it("binds prepared static bytes to the exact clean source", () => {
+    mkdirSync(join(root, "dist"));
+    write("dist/version.json", { version: "0.1.0-dev.0", sourceCommit: "a".repeat(40) });
+    writeFileSync(join(root, "dist/index.html"), "synthetic website");
+    expect(run("capture-build").status).toBe(0);
+    expect(run("check-build").status).toBe(0);
+    writeFileSync(join(root, "dist/index.html"), "changed website");
+    expect(run("check-build").status).not.toBe(0);
+    writeFileSync(join(root, "dist/index.html"), "synthetic website");
+    write("coverage/source.json", { commit: "a".repeat(40), dirty: false, contentSha256: "c".repeat(64) });
+    expect(run("check-build").status).not.toBe(0);
+  });
+  it("rejects extra files and symlinks in prepared static output", () => {
+    mkdirSync(join(root, "dist"));
+    write("dist/version.json", { version: "0.1.0-dev.0", sourceCommit: "a".repeat(40) });
+    expect(run("capture-build").status).toBe(0);
+    writeFileSync(join(root, "dist/extra"), "extra");
+    expect(run("check-build").status).not.toBe(0);
+    rmSync(join(root, "dist/extra"));
+    symlinkSync("version.json", join(root, "dist/link"));
+    expect(run("check-build").status).not.toBe(0);
+  });
   it("keeps application and independent chart versions distinct", () => {
     expect(JSON.parse(run("version").stdout)).toMatchObject({ application: "0.1.0-dev.0", chart: "0.2.0-dev.0" });
   });

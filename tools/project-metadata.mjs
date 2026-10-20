@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, lstatSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
 import { execFileSync } from "node:child_process";
 
 import { z } from "zod";
@@ -46,6 +46,31 @@ function releaseCheck() {
 const requiredChecks = ["check", "coverage", "build", "chart", "verify", "release-check"];
 const checkName = z.enum([...requiredChecks, "offline-preflight"]);
 const sourceSchema = z.object({ commit: z.string().regex(/^[a-f0-9]{40,64}$/), dirty: z.boolean(), contentSha256: z.string().regex(/^[a-f0-9]{64}$/) }).strict();
+const buildSchema = z.object({ source: sourceSchema, files: z.record(z.string(), z.string().regex(/^[a-f0-9]{64}$/)) }).strict();
+function staticInventory(directory = "dist") {
+  const files = {};
+  for (const name of readdirSync(directory).sort()) {
+    const file = `${directory}/${name}`;
+    const stat = lstatSync(file);
+    if (stat.isSymbolicLink()) throw new Error("Static artifact symlinks are forbidden");
+    if (stat.isDirectory()) Object.assign(files, staticInventory(file));
+    else if (stat.isFile()) files[file] = hash(file);
+    else throw new Error("Unexpected static artifact entry");
+  }
+  return files;
+}
+function buildIdentity(capture) {
+  const source = sourceSchema.parse(json("coverage/source.json"));
+  if (source.dirty) throw new Error("Prepared builds require clean reviewed source");
+  const built = json("dist/version.json");
+  if (built.sourceCommit !== source.commit || built.version !== versions().application) throw new Error("Prepared application identity mismatch");
+  const current = buildSchema.parse({ source, files: staticInventory() });
+  if (capture) write("coverage/web-build.json", current);
+  else {
+    const saved = buildSchema.parse(json("coverage/web-build.json"));
+    if (JSON.stringify(saved) !== JSON.stringify(current)) throw new Error("Prepared build source or bytes changed");
+  }
+}
 const checkSchema = z.object({ name: checkName, command: z.string().min(1), status: z.enum(["passed", "failed", "blocked"]), exitCode: z.number().int().min(0).max(255) }).strict();
 const planSchema = z.object({ scope: z.enum(["full", "scoped"]), checks: z.array(z.enum(requiredChecks)).min(1) }).strict();
 const receiptSchema = z.object({ schemaVersion: z.literal(1), source: sourceSchema, status: z.enum(["running", "passed", "failed", "blocked"]), scope: z.enum(["full", "scoped"]), plannedChecks: z.array(z.enum(requiredChecks)).min(1), checks: z.array(checkSchema), artifacts: z.array(z.object({ path: z.string().min(1), sha256: z.string().regex(/^[a-f0-9]{64}$/), version: z.string().min(1) }).strict()) }).passthrough();
@@ -135,5 +160,7 @@ else if (command === "build-version") {
   mkdirSync("dist", { recursive: true });
   write("dist/version.json", { version: versions().application, sourceCommit: process.env.SOURCE_COMMIT, clientCommit: game.clientCommit, bridgeVersion: game.bridgeVersion });
 } else if (command === "release-check") releaseCheck();
+else if (command === "capture-build") buildIdentity(true);
+else if (command === "check-build") buildIdentity(false);
 else if (command === "receipt") receipt(args);
 else throw new Error("Expected version, build-version, release-check or receipt");
