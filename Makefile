@@ -1,10 +1,11 @@
+override DOCKER_BUILD_ARGS += --build-arg SOURCE_COMMIT=$(shell git rev-parse HEAD) --build-arg SOURCE_DATE_EPOCH=$(shell git log -1 --pretty=%ct)
 GAME_ARTIFACT ?= docker-image://$(shell sed -n 's/.*"image": "\([^"]*\)".*/\1/p' game-artifact.lock.json)
 ifneq ($(CONTAINERIZED),1)
 QUALITY_DOCKERFILE := Dockerfile
 QUALITY_IMAGE := pokerweb:quality
 QUALITY_RUN_ARGS := --tmpfs /app/node_modules/.vite-temp:rw,mode=1777 --tmpfs /app/node_modules/.tmp:rw,mode=1777 --tmpfs /app/node_modules/.vite:rw,mode=1777
 RUNTIME_IMAGE := pokerweb:candidate
-IMAGE_COMMAND = $(DOCKER) buildx build $(DOCKER_BUILD_ARGS) --build-context game="$(GAME_ARTIFACT)" --target runtime --load --tag $(RUNTIME_IMAGE) .
+IMAGE_COMMAND = $(DOCKER) buildx build $(DOCKER_BUILD_ARGS) --build-context game="$(GAME_ARTIFACT)" --target runtime --output type=docker,rewrite-timestamp=true --tag $(RUNTIME_IMAGE) .
 VERIFY_COMMAND := /bin/sh docker/verify-browser.sh
 BUILD_COMMAND = $(DOCKER) buildx build $(DOCKER_BUILD_ARGS) --build-context game="$(GAME_ARTIFACT)" --target artifacts --output type=local,dest=dist .
 COVERAGE_COMMAND := node tools/coverage-report.mjs

@@ -21,6 +21,8 @@ jobs:
         run: |
           install -d -m 700 "$RUNNER_TEMP/registry-auth"
           echo "DOCKER_CONFIG=$RUNNER_TEMP/registry-auth" >> "$GITHUB_ENV"
+      - name: Pin image timestamps to the reviewed commit
+        run: echo "SOURCE_DATE_EPOCH=$(git log -1 --pretty=%ct)" >> "$GITHUB_ENV"
       - uses: docker/setup-buildx-action@e468171a9de216ec08956ac3ada2f0791b6bd435 # v3.11.1
       - name: Restore quality build graph
         uses: docker/build-push-action@263435318d21b8e681c14492fe198d362a7d2c83 # v6.18.0
@@ -60,8 +62,9 @@ jobs:
         with:
           context: .
           target: runtime
-          load: true
+          outputs: type=docker,rewrite-timestamp=true
           tags: pokerweb:candidate
+          build-args: SOURCE_COMMIT=${{ github.event.pull_request.head.sha || github.sha }}
           build-contexts: game=docker-image://${{ steps.game.outputs.image }}
           cache-from: type=gha,scope=${{ github.repository_id }}-runtime-node24-linux-amd64-${{ github.event_name == 'pull_request' && 'review' || 'trusted' }}
           cache-to: type=gha,mode=max,scope=${{ github.repository_id }}-runtime-node24-linux-amd64-${{ github.event_name == 'pull_request' && 'review' || 'trusted' }}
@@ -76,6 +79,35 @@ jobs:
           test "$(cat dist/verified/source-commit.txt)" = "$SOURCE_SHA"
           docker save pokerweb:candidate | gzip --no-name > dist/verified/runtime-image.docker.tar.gz
           sha256sum dist/verified/runtime-image.docker.tar.gz > dist/verified/runtime-image.sha256
+      - name: Export the tested graph with SBOM and provenance in the same workspace
+        id: verified_oci
+        uses: docker/build-push-action@263435318d21b8e681c14492fe198d362a7d2c83 # v6.18.0
+        with:
+          context: .
+          target: runtime
+          outputs: type=oci,dest=dist/verified/runtime-image.oci.tar,rewrite-timestamp=true
+          tags: pokerweb:candidate
+          build-args: SOURCE_COMMIT=${{ github.event.pull_request.head.sha || github.sha }}
+          build-contexts: game=docker-image://${{ steps.game.outputs.image }}
+          cache-from: type=gha,scope=${{ github.repository_id }}-runtime-node24-linux-amd64-${{ github.event_name == 'pull_request' && 'review' || 'trusted' }}
+          sbom: true
+          provenance: mode=max
+      - uses: oras-project/setup-oras@1c05fec4b9f67b83327bffb24220a862f10c0216 # official ORAS, immutable source
+        with:
+          version: '1.3.5'
+          url: https://github.com/oras-project/oras/releases/download/v1.3.5/oras_1.3.5_linux_amd64.tar.gz
+          checksum: f48a73ea6d026a862c3919fc773da9a8c86fc259c2c737d5baed3b8b9614ad22
+      - name: Bind the attested OCI graph to the exact freshly tested configuration
+        env:
+          OCI_ROOT_DIGEST: ${{ steps.verified_oci.outputs.digest }}
+        run: |
+          set -euo pipefail
+          [[ "$OCI_ROOT_DIGEST" =~ ^sha256:[0-9a-f]{64}$ ]]
+          config_id="$(oras manifest fetch --oci-layout --platform linux/amd64 "dist/verified/runtime-image.oci.tar@$OCI_ROOT_DIGEST" | jq -r .config.digest)"
+          test "$config_id" = "$(cat dist/verified/tested-image-id.txt)"
+          printf '%s\n' "$OCI_ROOT_DIGEST" > dist/verified/runtime-image.oci-digest.txt
+          cd dist/verified
+          sha256sum runtime-image.oci.tar > runtime-image.oci.sha256
       - name: Advisory coverage table
         if: always()
         run: test ! -f coverage/summary.md || cat coverage/summary.md >> "$GITHUB_STEP_SUMMARY"

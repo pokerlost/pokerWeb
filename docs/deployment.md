@@ -26,3 +26,28 @@ artifact. Access, test, type, build and invalid-report failures block acceptance
 measured coverage below 100% emits a warning and remains successful. Registry
 authentication exists only in a temporary job directory. See the
 [delivery guide](release_guide.md) for the complete boundary and recovery procedure.
+
+## Static routing and logs
+
+Read the [routing ADR](routing-adr.md). Only known Vue routes receive the SPA shell;
+unknown operations/assets return 404. Methods other than GET/HEAD return 405 with
+Allow. WASM uses application/wasm; immutable content-addressed Flutter assets and
+hashed Vue assets use a one-year cache. Security headers and validated request IDs
+are included in error responses too. JSON access logs omit raw URL/query, headers
+and bodies; the platform collector supplies service/environment context. Native
+file-not-found logs are disabled to avoid echoing query material. `nginx -T` and
+real HTTP/browser checks validate the included nonsecret environment configuration.
+
+The image retains upstream dependency licenses under `/licenses`; a hashed static
+license asset is linked from HTML. Project [MIT](../LICENSE) does not relicense
+those dependencies or the Flutter bundle notices.
+
+## Reproducible image identity
+
+Native Make and Actions builds pin `SOURCE_DATE_EPOCH` to the exact source commit timestamp, using [BuildKit's supported reproducible-build input](https://docs.docker.com/build/ci/github-actions/reproducible-builds/). Wall-clock creation metadata must not change a tested configuration during private promotion. The strict tested image-ID comparison remains required; a cache hit alone is insufficient.
+
+Both Docker and OCI runtime exporters enable BuildKit rewrite-timestamp=true. SOURCE_DATE_EPOCH alone stabilizes creation metadata but does not ensure identical COPY layer metadata between fresh checkouts; strict pre/post-push image-ID checks remain in place.
+
+## Exact OCI promotion
+
+After tests, the same CI workspace exports runtime-image.oci.tar with SBOM/provenance and checks its config ID against the tested image. Delivery verifies its checksum and copies the complete OCI graph with official checksum-pinned ORAS 1.3.5. It requires an existing private destination before push and checks digest/config identity afterward. No new package, ACL, release or deployment is created implicitly.
