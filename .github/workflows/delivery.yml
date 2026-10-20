@@ -40,6 +40,8 @@ jobs:
           test "$(docker image inspect pokerweb:candidate --format '{{.Id}}')" = "$(cat "$RUNNER_TEMP/web-tested/tested-image-id.txt")"
           install -d -m 700 "$RUNNER_TEMP/registry-auth"
           echo "DOCKER_CONFIG=$RUNNER_TEMP/registry-auth" >> "$GITHUB_ENV"
+      - name: Pin image timestamps to the reviewed commit
+        run: echo "SOURCE_DATE_EPOCH=$(git log -1 --pretty=%ct)" >> "$GITHUB_ENV"
       - uses: docker/setup-buildx-action@e468171a9de216ec08956ac3ada2f0791b6bd435 # v3.11.1
       - name: Authenticate only to the approved private registry
         env: {REGISTRY_TOKEN: '${{ github.token }}'}

@@ -41,3 +41,7 @@ real HTTP/browser checks validate the included nonsecret environment configurati
 The image retains upstream dependency licenses under `/licenses`; a hashed static
 license asset is linked from HTML. Project [MIT](../LICENSE) does not relicense
 those dependencies or the Flutter bundle notices.
+
+## Reproducible image identity
+
+Native Make and Actions builds pin `SOURCE_DATE_EPOCH` to the exact source commit timestamp, using [BuildKit's supported reproducible-build input](https://docs.docker.com/build/ci/github-actions/reproducible-builds/). Wall-clock creation metadata must not change a tested configuration during private promotion. The strict tested image-ID comparison remains required; a cache hit alone is insufficient.
