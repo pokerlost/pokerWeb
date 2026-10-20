@@ -62,6 +62,7 @@ jobs:
           target: runtime
           load: true
           tags: pokerweb:candidate
+          build-args: SOURCE_COMMIT=${{ github.event.pull_request.head.sha || github.sha }}
           build-contexts: game=docker-image://${{ steps.game.outputs.image }}
           cache-from: type=gha,scope=${{ github.repository_id }}-runtime-node24-linux-amd64-${{ github.event_name == 'pull_request' && 'review' || 'trusted' }}
           cache-to: type=gha,mode=max,scope=${{ github.repository_id }}-runtime-node24-linux-amd64-${{ github.event_name == 'pull_request' && 'review' || 'trusted' }}

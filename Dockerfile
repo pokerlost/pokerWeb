@@ -18,10 +18,18 @@ COPY tsconfig.json tsconfig.app.json tsconfig.node.json tsconfig.vitest.json env
 COPY --exclude=**/__tests__/** src/ src/
 COPY public/ public/
 COPY tools/install-game.mjs tools/install-game.mjs
+COPY --chmod=0444 LICENSE THIRD_PARTY_NOTICES.md /licenses/
+# Retain installed dependency notices without relicensing their code.
+RUN --network=none find node_modules -type f     \( -iname 'license*' -o -iname 'notice*' -o -iname 'copying*' \)     -exec cp --parents --target-directory=/licenses/ {} +
 # A named immutable client artifact input, never a second source checkout.
 COPY --from=game / /game-artifact/
 ENV POKER_GAME_ARTIFACT=/game-artifact
 RUN --network=none npm run build-only
+RUN --network=none set -eu; \
+    find /licenses -type f -print0 | sort -z | xargs -0 cat > /tmp/third-party-licenses.txt; \
+    license_hash="$(sha256sum /tmp/third-party-licenses.txt | cut -d ' ' -f 1)"; \
+    cp /tmp/third-party-licenses.txt "dist/assets/licenses-$license_hash.txt"; \
+    sed -i "s#</head>#<link rel=license href=/assets/licenses-$license_hash.txt></head>#" dist/index.html
 
 FROM dependencies AS test
 COPY . ./
@@ -39,8 +47,14 @@ FROM scratch AS artifacts
 COPY --from=build /app/dist/ /
 
 FROM nginxinc/nginx-unprivileged:stable-alpine@sha256:782bb89768cc87b7f95c18b95baa1af250e5d451f26794f59363540161147c01 AS runtime
-COPY --chown=101:101 --chmod=0444 deploy/nginx.conf /etc/nginx/conf.d/default.conf
+COPY --chown=101:101 --chmod=0444 deploy/nginx/http.conf /etc/nginx/conf.d/default.conf
+COPY --exclude=http.conf --chown=101:101 --chmod=u=rX,go=rX deploy/nginx/ /etc/nginx/pokerlost/
+COPY --chown=101:101 --chmod=0444 deploy/environments/local.conf /etc/nginx/pokerlost/environment.conf
 COPY --from=build --chown=101:101 /app/dist/ /usr/share/nginx/html/
+COPY --chmod=u=rwX,go=rX --from=build /licenses/ /licenses/
+ARG SOURCE_COMMIT=unrecorded
+LABEL org.opencontainers.image.revision=$SOURCE_COMMIT
+LABEL org.opencontainers.image.licenses="MIT"
 LABEL org.opencontainers.image.source="https://github.com/pokerlost/pokerWeb"
 USER 101:101
 EXPOSE 8080

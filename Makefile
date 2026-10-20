@@ -1,3 +1,4 @@
+override DOCKER_BUILD_ARGS += --build-arg SOURCE_COMMIT=$(shell git rev-parse HEAD)
 GAME_ARTIFACT ?= docker-image://$(shell sed -n 's/.*"image": "\([^"]*\)".*/\1/p' game-artifact.lock.json)
 ifneq ($(CONTAINERIZED),1)
 QUALITY_DOCKERFILE := Dockerfile

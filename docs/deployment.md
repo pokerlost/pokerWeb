@@ -26,3 +26,18 @@ artifact. Access, test, type, build and invalid-report failures block acceptance
 measured coverage below 100% emits a warning and remains successful. Registry
 authentication exists only in a temporary job directory. See the
 [delivery guide](release_guide.md) for the complete boundary and recovery procedure.
+
+## Static routing and logs
+
+Read the [routing ADR](routing-adr.md). Only known Vue routes receive the SPA shell;
+unknown operations/assets return 404. Methods other than GET/HEAD return 405 with
+Allow. WASM uses application/wasm; immutable content-addressed Flutter assets and
+hashed Vue assets use a one-year cache. Security headers and validated request IDs
+are included in error responses too. JSON access logs omit raw URL/query, headers
+and bodies; the platform collector supplies service/environment context. Native
+file-not-found logs are disabled to avoid echoing query material. `nginx -T` and
+real HTTP/browser checks validate the included nonsecret environment configuration.
+
+The image retains upstream dependency licenses under `/licenses`; a hashed static
+license asset is linked from HTML. Project [MIT](../LICENSE) does not relicense
+those dependencies or the Flutter bundle notices.

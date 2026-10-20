@@ -19,6 +19,12 @@ Coverage below 100% warns; tests, types, configuration, builds and report errors
 The website pins a reviewed private Flutter OCI artifact by digest, client SHA and manifest
 checksum. Browser acceptance uses that actual bundle under Nginx. See
 [development and testing](docs/development.md), [architecture](docs/architecture.md),
-[static delivery](docs/deployment.md), [versioning](docs/versioning.md) and
+[static delivery](docs/deployment.md), [routing ownership](docs/routing-adr.md), [versioning](docs/versioning.md) and
 [candidate delivery](docs/release_guide.md). Docker recipes and contribution metadata are
 reviewed snapshots with an exact source revision in `.github/engineering-source.json`.
+
+## 📄 License
+
+Original source/documentation uses [MIT](LICENSE). Preserve the
+[third-party notices](THIRD_PARTY_NOTICES.md); upstream assets, distributions and
+private data retain their own terms and access boundaries.

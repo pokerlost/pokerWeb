@@ -61,5 +61,6 @@
   "packageManager": "npm@11.19.1",
   "imports": {
     "#game-artifact": "./game-artifact.lock.json"
-  }
+  },
+  "license": "MIT"
 }
