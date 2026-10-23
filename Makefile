@@ -1,3 +1,7 @@
+# Quick dev commands never prepare a product/build image.
+ifneq ($(filter lint format format-check check,$(MAKECMDGOALS)),)
+override CONTAINERIZED := 1
+endif
 APP_VERSION = $(shell sed -n 's/.*"version": "\([^" ]*\)".*/\1/p' package.json | head -1)
 SOURCE_COMMIT = $(shell git rev-parse HEAD)
 SOURCE_DATE_EPOCH = $(shell git log -1 --pretty=%ct)
@@ -26,8 +30,10 @@ QUALITY_EXTRA_TARGETS := chart-check format-check
 VERSION_COMMAND = $(QUALITY_RUN) node tools/project-metadata.mjs version
 RELEASE_CHECK_COMMAND = $(DOCKER) image inspect $(RUNTIME_IMAGE) > coverage/runtime-image.json && $(QUALITY_RUN) node tools/project-metadata.mjs release-check
 OFFLINE_PREFLIGHT_COMMAND = $(MAKE) web-offline-preflight
-CI_LOCAL_TARGETS := check coverage build chart verify release-check
+CI_LOCAL_TARGETS := acceptance coverage build chart verify release-check
 RECEIPT_COMMAND = $(QUALITY_RUN) node tools/project-metadata.mjs receipt
+QUALITY_EXTRA_TARGETS += acceptance
+CI_LOCAL_TARGETS ?= acceptance coverage build verify release-check
 include docker/quality.mk
 .PHONY: web-offline-preflight
 web-offline-preflight: source-identity
@@ -99,6 +105,15 @@ image:
 chart-check:
 	helm lint deploy/chart --strict --set localDevelopment=true --set image.tag=ci-candidate
 
-check: lint typecheck test chart-check
+check: lint format-check ## Fast lint-only gate; no tests/build.
+
+acceptance: lint typecheck test chart-check
 
 endif
+
+.PHONY: dev-policy-help
+help: dev-policy-help
+dev-policy-help:
+	@printf '%s\n' 'Daily: make lint; explicit git push origin dev.' \
+	  'Manual only: test, typecheck, coverage, build, acceptance, ci-local.' \
+	  'Native lint tools must be installed; lint never syncs/builds the application.'

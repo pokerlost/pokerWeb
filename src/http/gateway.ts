@@ -1,8 +1,9 @@
 import { z } from "zod";
 
+import type { Environment } from "./environment";
 import { serviceIdHeader, serviceIdSchema, type ServiceId } from "./service-id";
 
-export type Authentication = { kind: "public" } | { kind: "bearer"; token: string };
+export type Authentication = { kind: "public" } | { kind: "bearer"; token: string; environment?: Environment; origin?: string };
 
 export class GatewayError extends Error {
   constructor(readonly status: number, readonly code: string) {
@@ -24,13 +25,19 @@ export class GatewayClient {
   private readonly origin: string;
   private readonly serviceId: ServiceId;
 
-  constructor(origin: string, serviceId: ServiceId, private readonly request: typeof fetch = fetch) {
+  constructor(origin: string, serviceId: ServiceId, private readonly request: typeof fetch = fetch, private readonly environment?: Environment) {
     let url: URL;
     try {
       url = new URL(origin);
     } catch {
       throw new Error("Invalid gateway configuration");
     }
+    const loopback = ["localhost", "127.0.0.1", "[::1]"].includes(url.hostname);
+    if ((url.protocol === "http:" && !loopback)
+      || (environment && environment !== "local" && url.protocol !== "https:")
+      || (environment === "local" && !loopback)
+      || /[\s\\]/.test(origin))
+      throw new Error("Invalid gateway configuration");
     const identity = serviceIdSchema.safeParse(serviceId);
     if (!["http:", "https:"].includes(url.protocol) || url.username || url.password
       || url.pathname !== "/" || url.search || url.hash || !identity.success)
@@ -49,6 +56,9 @@ export class GatewayClient {
       [serviceIdHeader]: this.serviceId,
     });
     if (options.authentication?.kind === "bearer") {
+      if (this.environment && (options.authentication.environment !== this.environment
+        || options.authentication.origin !== this.origin))
+        throw new Error("Authentication target does not match client target");
       if (!/^[\x21-\x7e]+$/.test(options.authentication.token))
         throw new Error("Invalid authentication configuration");
       headers.set("Authorization", `Bearer ${options.authentication.token}`);

@@ -1,5 +1,10 @@
 # Website development
 
+Daily policy: use `dev`, run `make lint`, inspect the staged diff, then explicitly
+`git push origin dev`. `main` and `test` are preserved. Test, typecheck, build,
+coverage and full acceptance commands below are manual. New manual Actions in
+`dev` may require a later authorized default-branch activation.
+
 Git, Make and Docker/Buildx are the required tools. The native npm lock owns dependency
 resolution inside Docker; contributors do not need a host Node or Flutter SDK.
 
